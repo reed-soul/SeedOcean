@@ -66,15 +66,25 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading, wakeFi
     const N = nNode;
     const V = normalize(cameraPosition.sub(positionWorld));
     const fresnel = pow(float(1).sub(max(dot(N, V), 0)), 3).saturate();
-    const depthTint = smoothstep(float(-3), float(6), positionWorld.y);
+    // Cel-shaded fresnel: quantize into discrete bands when stylized > 0.
+    const fresnelCel = floor(fresnel.mul(shading.celBands)).div(shading.celBands);
+    const fres = mix(fresnel, fresnelCel, shading.stylized);
+    const depthTint = mix(
+      smoothstep(float(-3), float(6), positionWorld.y),
+      floor(smoothstep(float(-3), float(6), positionWorld.y).mul(shading.celBands)).div(shading.celBands),
+      shading.stylized,
+    );
 
     const heightFactor = saturate(positionWorld.y.mul(0.4).add(0.3));
     const H = normalize(N.negate().add(shading.sunDir));
-    const sss = pow(saturate(dot(V, H.negate())), 4).mul(shading.sssStrength).mul(heightFactor);
+    const sssRaw = pow(saturate(dot(V, H.negate())), 4).mul(shading.sssStrength).mul(heightFactor);
+    // Cel SSS — hard step instead of smooth falloff.
+    const sssCel = step(float(0.5), sssRaw).mul(shading.sssStrength).mul(heightFactor);
+    const sss = mix(sssRaw, sssCel, shading.stylized);
 
     const shallow = mix(shading.waterColor, shading.scatterColor, sss);
     const body = mix(shading.deepColor, shallow, depthTint);
-    const spec = shading.foamColor.mul(fresnel.mul(shading.foamStrength));
+    const spec = shading.foamColor.mul(fres.mul(shading.foamStrength));
 
     const foamRaw = float(0).toVar();
     cascades.forEach((c, i) => {
@@ -88,7 +98,10 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading, wakeFi
       foamRaw.addAssign(wakeTex.sample(wakeUV).g.div(255).mul(shading.wakeFoam));
     }
 
-    const coverage = smoothstep(float(0.2), float(0.9), foamRaw);
+    // Cartoon foam: hard edge instead of smoothstep.
+    const coverageReal = smoothstep(float(0.2), float(0.9), foamRaw);
+    const coverageCel = step(shading.foamThreshold, foamRaw);
+    const coverage = mix(coverageReal, coverageCel, shading.stylized);
     const foam = shading.foamColor.mul(float(0.55).add(saturate(dot(N, shading.sunDir)).mul(0.55)));
 
     let surface = mix(body.add(spec), foam, coverage);
@@ -99,13 +112,21 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading, wakeFi
 
     const refOffset = N.xz.mul(shading.refractionDistort);
     const refracted = viewportSharedTexture(viewportSafeUV(screenUV.add(refOffset)));
-    const reflectance = fresnel.mul(shading.reflectionStrength).saturate();
-    const refractAmt = float(1).sub(reflectance).mul(shading.refractionStrength).saturate();
+    // Stylized mode suppresses refraction AND reflection so the water reads as
+    // flat cartoon color bands rather than a see-through/reflective surface
+    // (both sampled backdrops would otherwise dominate and wash out the cel look).
+    const reflectance = fres.mul(shading.reflectionStrength).mul(float(1).sub(shading.stylized)).saturate();
+    const refractAmt = float(1).sub(reflectance).mul(shading.refractionStrength).mul(float(1).sub(shading.stylized)).saturate();
     const aboveWater = float(1).sub(below);
     surface = mix(surface, refracted.rgb, refractAmt.mul(aboveWater));
     surface = mix(surface, groundReflector.rgb, reflectance.mul(aboveWater));
 
-    return surface;
+    // Global posterize: quantize the final color into celBands steps. This is
+    // the single most effective cartoon cue — it bands EVERY color transition
+    // (depth, fresnel, sss, foam) uniformly, giving the Wind Waker / Genshin
+    // read that per-channel cel branches alone can't achieve.
+    const surfaceCel = floor(surface.mul(shading.celBands)).div(shading.celBands);
+    return mix(surface, surfaceCel, shading.stylized);
   })();
 
   mat.roughnessNode = shading.roughness;
@@ -136,6 +157,12 @@ export function createShadingUniforms(preset) {
     reflectDistort: uniform(preset.reflectDistort ?? 0.018),
     wakeHeight: uniform(preset.wakeHeight ?? 0.85),
     wakeFoam: uniform(preset.wakeFoam ?? 0.9),
+    // Stylized/cel rendering: 0 = realistic (default), 1 = full cartoon.
+    // NOTE: initialize to a tiny non-zero value to prevent TSL from constant-
+    // folding the mix() branches when the initial value is exactly 0; the real
+    // value is set by applyShadingUniforms on build + every preset switch.
+    stylized: uniform(0.001),
+    celBands: uniform(preset.celBands ?? 4),
   };
 }
 
@@ -152,4 +179,7 @@ export function applyShadingUniforms(shading, preset, state) {
   shading.metalness.value = preset.metalness ?? 0.14;
   shading.refractionStrength.value = state.refractionStrength ?? preset.refractionStrength ?? 0.72;
   shading.reflectionStrength.value = state.reflectionStrength ?? preset.reflectionStrength ?? 0.55;
+  // Stylized mode is a uniform (not a rebuild), so it hot-swaps on preset change.
+  shading.stylized.value = preset.renderMode === 'stylized' ? 1 : 0;
+  shading.celBands.value = preset.celBands ?? 4;
 }

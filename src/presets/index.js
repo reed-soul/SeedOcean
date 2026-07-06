@@ -9,6 +9,8 @@ export { sunset } from './sunset.js';
 export { moonlit } from './moonlit.js';
 export { arctic } from './arctic.js';
 export { bioluminescent } from './bioluminescent.js';
+export { cartoon } from './cartoon.js';
+export { ink } from './ink.js';
 export { gale } from './gale.js';
 export { storm } from './storm.js';
 export { tempest } from './tempest.js';
@@ -24,13 +26,15 @@ import { sunset } from './sunset.js';
 import { moonlit } from './moonlit.js';
 import { arctic } from './arctic.js';
 import { bioluminescent } from './bioluminescent.js';
+import { cartoon } from './cartoon.js';
+import { ink } from './ink.js';
 import { gale } from './gale.js';
 import { storm } from './storm.js';
 import { tempest } from './tempest.js';
 
 /**
  * Preset registry — ordered as a narrative: calm morning → temperate → tropical
- * → night → polar → bioluminescent → rising storm.
+ * → night → polar → bioluminescent → stylized → rising storm.
  * @type {Record<string, typeof calm>}
  */
 export const PRESETS = {
@@ -45,6 +49,8 @@ export const PRESETS = {
   moonlit,
   arctic,
   bioluminescent,
+  cartoon,
+  ink,
   gale,
   storm,
   tempest,

@@ -27,9 +27,15 @@ Persistent foam · 10 sea-state presets · buoyancy · underwater · spray & rai
     <td width="25%"><sub>Open Storm</sub><br><img src="docs/assets/presets/storm.webp"></td>
     <td width="25%"><sub>Tempest</sub><br><img src="docs/assets/presets/tempest.webp"></td>
   </tr>
+  <tr>
+    <td width="25%"><sub>Cartoon (cel)</sub><br><img src="docs/assets/presets/cartoon.webp"></td>
+    <td width="25%"><sub>Ink Wash</sub><br><img src="docs/assets/presets/ink.webp"></td>
+    <td width="25%"><sub>Long Swell</sub><br><img src="docs/assets/presets/swell.webp"></td>
+    <td width="25%"><sub>Golden Sunset</sub><br><img src="docs/assets/presets/sunset.webp"></td>
+  </tr>
 </table>
 
-> **Status: `v0.6.0-alpha`.** Eight of fourteen presets above — day & night, temperate, tropical, polar, and bioluminescent. FFT ocean with persistent/advected foam, a 256² quality mode, TypeScript types, a `<water-canvas>` web component, atmospheric spray + rain, and a WebGL2/Gerstner fallback that keeps the API identical when WebGPU is unavailable.
+> **Status: `v0.6.0-alpha`.** Twelve of sixteen presets above — realistic day/night/tropical/polar/bioluminescent, plus cel-shaded **Cartoon** and **Ink Wash** stylized modes. FFT ocean with persistent/advected foam, a 256² quality mode, TypeScript types, a `<water-canvas>` web component, atmospheric spray + rain, a procedural star field, and a WebGL2/Gerstner fallback that keeps the API identical when WebGPU is unavailable.
 
 ## Live demo
 
@@ -70,7 +76,7 @@ const ocean = await SeedOcean.create({
   renderer,
   scene,
   camera,
-  preset: 'coastal',   // any of the 14 presets
+  preset: 'coastal',   // any of the 16 presets
   quality: 'quality',  // 'perf' (128²) | 'quality' (256²)
 });
 
@@ -118,7 +124,7 @@ Re-exports: `PRESETS`, `buildFFTOcean`, `BuoyancySampler`, `validateFFT`, …
 - **Shared caustics** — sea floor, buoy, boat hull, floating crates
 - **Atmosphere** — wind-blown sea spray at breaking crests + a screen rain layer (zero-cost when intensity is 0)
 - **WebGL2 fallback** — when WebGPU is unavailable, a Gerstner-wave renderer keeps the same API and visual identity
-- **14 presets** — Calm Bay · Dawn Glass · Sea Mist · Light Breeze · Coastal Chop · Long Swell · **Tropical Reef** · Golden Sunset · **Moonlit** · **Arctic** · **Bioluminescent** · Gale · Open Storm · Tempest
+- **16 presets** — Calm Bay · Dawn Glass · Sea Mist · Light Breeze · Coastal Chop · Long Swell · **Tropical Reef** · Golden Sunset · **Moonlit** · **Arctic** · **Bioluminescent** · **Cartoon** · **Ink Wash** · Gale · Open Storm · Tempest
 - **TypeScript types** + **`<water-canvas>` web component** + **glTF export**
 
 ## Run locally
@@ -147,7 +153,7 @@ pnpm capture        # regenerate docs/assets screenshots + GIF
 | 4 ✅ | Underwater, caustics, buoyancy |
 | 5 ✅ | Refraction/reflection, wake, multi-body physics |
 | 6 ✅ | GitHub Pages, npm API, CI |
-| 7 ✅ | v0.6 — 14 presets, quality mode, persistent foam, TS types, web component, spray/rain, WebGL2 fallback *(current)* |
+| 7 ✅ | v0.6 — 16 presets + star field + cel-shaded stylized mode, quality mode, persistent foam, TS types, web component, spray/rain, WebGL2 fallback *(current)* |
 | 8 🔜 | Rivers / shoreline editor / flowmap painter |
 
 ## Layout
