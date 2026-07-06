@@ -23,7 +23,7 @@ export function buildGUI(ctx) {
   const color = gui.addFolder('Water');
   color.addColor(state, 'waterColor').name('Shallow').onChange(() => ctx.onLive());
   color.addColor(state, 'deepColor').name('Deep').onChange(() => ctx.onLive());
-  color.add(state, 'sssStrength', 0, 2, 0.01).name('SSS').onChange(() => ctx.onLive());
+  color.add(state, 'sssStrength', 0, 3, 0.01).name('SSS').onChange(() => ctx.onLive());
   color.add(state, 'foamStrength', 0, 1, 0.01).name('Foam').onChange(() => ctx.onLive());
   color.add(state, 'foamPersistence', 0, 0.95, 0.01).name('Foam hold').onChange(() => ctx.onLive());
   color.add(state, 'roughness', 0, 1, 0.01).name('Roughness').onChange(() => ctx.onLive());
