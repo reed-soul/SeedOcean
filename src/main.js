@@ -108,7 +108,7 @@ async function init() {
   buildGUI({
     state,
     onPreset: switchPreset,
-    onReseed: rebuildOcean,
+    onReseed: reseedOcean,
     onLive: applyLiveTuning,
     onSky: syncSky,
     onExport: () => exportSnapshot(),
@@ -128,7 +128,7 @@ async function switchPreset(id) {
   syncSky();
 }
 
-async function rebuildOcean() {
+async function reseedOcean() {
   await ocean.applyPreset(preset, state);
 }
 

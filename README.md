@@ -25,7 +25,7 @@ Inspired by [SeedThree](https://github.com/SkyeShark/SeedThree) — live preset 
 
 | Phase | Target |
 |-------|--------|
-| 1 ✅ | Scaffold, Gerstner, presets, export |
+| 1 ✅ | Scaffold, presets, export |
 | 2 ✅ | WebGPU FFT/IFFT (JONSWAP) |
 | 3 ✅ | Clipmap, SSS, 3rd cascade |
 | 4 ✅ | Underwater, caustics, buoyancy *(this release)* |
