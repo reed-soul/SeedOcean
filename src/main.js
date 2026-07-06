@@ -2,10 +2,10 @@ import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import WebGPU from 'three/addons/capabilities/WebGPU.js';
 
-import { resolveWaves } from './core/gerstner.js';
-import { buildOcean } from './core/ocean.js';
+import { buildFFTOcean } from './core/fft-ocean.js';
+import { validateFFT } from './core/fft/fft.js';
 import { buildEnvironment } from './core/environment.js';
-import { exportOceanGLB } from './core/export-glb.js';
+import { exportFFTOceanGLB } from './core/export-glb.js';
 import { PRESETS, DEFAULT_PRESET } from './presets/index.js';
 import { buildGUI, stateFromPreset } from './ui/controls.js';
 import './ui/theme.css';
@@ -30,7 +30,6 @@ let camera;
 let controls;
 let ocean;
 let env;
-let waves;
 let state;
 let clock;
 let preset;
@@ -38,7 +37,6 @@ let preset;
 async function init() {
   preset = PRESETS[DEFAULT_PRESET];
   state = stateFromPreset(preset);
-  waves = resolveWaves(preset, state.seed, state.waveAmp);
 
   renderer = new THREE.WebGPURenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -51,7 +49,7 @@ async function init() {
   scene.fog = new THREE.FogExp2(0x4a90b8, 0.0012);
 
   camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 4000);
-  camera.position.set(0, 12, 42);
+  camera.position.set(0, 14, 48);
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
@@ -62,18 +60,20 @@ async function init() {
 
   await renderer.init();
 
+  const fftTest = await validateFFT(renderer, 128);
+  if (!fftTest.pass) {
+    console.warn(`FFT self-test failed (impulse=${fftTest.err1}, freq=${fftTest.err2})`);
+  }
+
   env = buildEnvironment(renderer);
   scene.add(env.sky);
   scene.add(env.sunLight);
   scene.add(env.hemi);
   syncSky();
 
-  ocean = buildOcean(waves);
-  ocean.applyColors({ ...preset, ...state });
-  ocean.setWaveGlobals(state.waveSpeed, 1);
+  ocean = await buildFFTOcean(renderer, preset, state);
   scene.add(ocean.mesh);
 
-  // Reference buoy — shows scale against the swell.
   const buoy = new THREE.Mesh(
     new THREE.CylinderGeometry(0.35, 0.5, 1.2, 12),
     new THREE.MeshStandardNodeMaterial({ color: 0xff5533, roughness: 0.55 }),
@@ -85,7 +85,7 @@ async function init() {
   buildGUI({
     state,
     onPreset: switchPreset,
-    onReseed: rebuildWaves,
+    onReseed: rebuildOcean,
     onLive: applyLiveTuning,
     onSky: syncSky,
     onExport: () => exportSnapshot(),
@@ -96,23 +96,20 @@ async function init() {
   renderer.setAnimationLoop(animate);
 }
 
-function switchPreset(id) {
+async function switchPreset(id) {
   preset = PRESETS[id];
   Object.assign(state, stateFromPreset(preset));
-  rebuildWaves();
+  await ocean.applyPreset(preset, state);
   applyLiveTuning();
   syncSky();
 }
 
-function rebuildWaves() {
-  waves = resolveWaves(preset, state.seed, state.waveAmp);
-  ocean.updateWaves(waves, 1);
-  ocean.setWaveGlobals(state.waveSpeed, 1);
+async function rebuildOcean() {
+  await ocean.applyPreset(preset, state);
 }
 
 function applyLiveTuning() {
-  ocean.applyColors({ ...preset, ...state });
-  ocean.setWaveGlobals(state.waveSpeed, 1);
+  ocean.applyLiveTuning(preset, state);
   renderer.toneMappingExposure = state.exposure;
 }
 
@@ -124,14 +121,15 @@ function syncSky() {
     cloudCoverage: state.cloudCoverage,
   });
   env.sky.cloudCoverage.value = state.cloudCoverage;
-  env.updateSun(scene);
+  const sunDir = env.updateSun(scene);
+  ocean.setSunDirection(sunDir);
   renderer.toneMappingExposure = state.exposure;
 }
 
-function exportSnapshot() {
-  const t = clock.getElapsedTime();
+async function exportSnapshot() {
+  ocean.evolve(clock.getElapsedTime(), clock.getDelta(), state.waveSpeed);
   const slug = preset.id;
-  exportOceanGLB(ocean.mesh, waves, t, state.waveSpeed, `seedocean-${slug}.glb`);
+  await exportFFTOceanGLB(renderer, ocean.mesh, ocean.simulator, `seedocean-${slug}.glb`);
 }
 
 function onResize() {
@@ -145,10 +143,14 @@ function animate() {
   const t = clock.getElapsedTime();
   controls.update();
 
+  ocean.evolve(t, dt, state.waveSpeed);
+
   if (hud) {
+    const fft = ocean.simulator;
     hud.textContent = [
-      `SeedOcean v0.1.0-alpha`,
+      'SeedOcean v0.2.0-alpha · FFT/JONSWAP',
       `${preset.name} · seed ${state.seed}`,
+      `grid ${fft.N}² · ${fft.cascades.length} cascades`,
       `t ${t.toFixed(1)}s`,
     ].join('\n');
   }

@@ -3,9 +3,6 @@ import { PRESET_LIST } from '../presets/index.js';
 
 /**
  * @param {object} ctx
- * @param {(presetId: string) => void} ctx.onPreset
- * @param {() => void} ctx.onReseed
- * @param {() => void} ctx.onExport
  */
 export function buildGUI(ctx) {
   const gui = new GUI({ title: 'SeedOcean' });
@@ -17,10 +14,11 @@ export function buildGUI(ctx) {
     .name('Environment')
     .onChange((id) => ctx.onPreset(id));
 
-  const waves = gui.addFolder('Waves');
+  const waves = gui.addFolder('Spectrum');
   waves.add(state, 'seed', 1, 9999, 1).name('Seed').onFinishChange(ctx.onReseed);
   waves.add(state, 'waveAmp', 0.2, 2.0, 0.01).name('Amplitude').onChange(() => ctx.onReseed());
-  waves.add(state, 'waveSpeed', 0.1, 2.5, 0.01).name('Speed').onChange(() => ctx.onLive());
+  waves.add(state, 'waveSpeed', 0.1, 2.5, 0.01).name('Wind ×').onChange(() => ctx.onReseed());
+  waves.add(state, 'windDirection', 0, 360, 1).name('Wind °').onChange(() => ctx.onReseed());
 
   const color = gui.addFolder('Water');
   color.addColor(state, 'waterColor').name('Shallow').onChange(() => ctx.onLive());
@@ -45,6 +43,7 @@ export function stateFromPreset(preset) {
     seed: preset.seed,
     waveAmp: preset.waveAmp,
     waveSpeed: preset.waveSpeed,
+    windDirection: preset.windDirection ?? preset.sky?.azimuth ?? 45,
     waterColor: preset.waterColor,
     deepColor: preset.deepColor,
     foamStrength: preset.foamStrength,
