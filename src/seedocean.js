@@ -102,7 +102,6 @@ export class SeedOcean {
       this.scene.add(this.env.sky);
       this.scene.add(this.env.sunLight);
       this.scene.add(this.env.hemi);
-      this.syncSky();
     }
 
     this.ocean = await buildFFTOcean(this.renderer, this.preset, this.state);
@@ -129,6 +128,8 @@ export class SeedOcean {
       this.underwater = createUnderwaterPipeline(this.renderer, this.scene, this.camera);
       this.underwater.setPreset(this.preset);
     }
+
+    this.syncSky();
 
     this.ocean.evolve(0, 1 / 60, this.state.waveSpeed);
     if (this.buoyancy) await this.buoyancy.requestReadback(this.renderer);
@@ -228,7 +229,7 @@ export class SeedOcean {
     });
     this.env.sky.cloudCoverage.value = this.state.cloudCoverage;
     this.sunDir = this.env.updateSun(this.scene);
-    this.ocean.setSunDirection(this.sunDir);
+    this.ocean?.setSunDirection(this.sunDir);
     this.underwater?.uniforms.sunDir.value.copy(this.sunDir);
     this.renderer.toneMappingExposure = this.state.exposure;
   }

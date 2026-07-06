@@ -25,7 +25,7 @@ function waitForServer(ms = 15000) {
   });
 }
 
-const vite = spawn('npx', ['vite', '--port', String(PORT), '--strictPort', '--host', '127.0.0.1'], {
+const vite = spawn('pnpm', ['exec', 'vite', '--port', String(PORT), '--strictPort', '--host', '127.0.0.1'], {
   cwd: ROOT,
   stdio: 'pipe',
   env: { ...process.env, BROWSER: 'none' },

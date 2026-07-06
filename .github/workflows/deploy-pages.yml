@@ -20,13 +20,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
+          cache: pnpm
 
-      - run: npm ci
-      - run: npm run build:pages
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build:pages
 
       - uses: actions/upload-pages-artifact@v3
         with:

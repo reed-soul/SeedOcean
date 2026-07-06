@@ -33,7 +33,7 @@ function run(cmd, args, opts = {}) {
   });
 }
 
-const preview = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort', '--host', '127.0.0.1'], {
+const preview = spawn('pnpm', ['exec', 'vite', 'preview', '--port', String(PORT), '--strictPort', '--host', '127.0.0.1'], {
   cwd: ROOT,
   stdio: 'pipe',
   env: { ...process.env },
@@ -42,7 +42,7 @@ const preview = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--stri
 preview.stderr.on('data', (d) => process.stderr.write(d));
 
 try {
-  await run('npm', ['run', 'build'], { cwd: ROOT });
+  await run('pnpm', ['run', 'build'], { cwd: ROOT });
   await waitForServer();
   await mkdir(OUT, { recursive: true });
 

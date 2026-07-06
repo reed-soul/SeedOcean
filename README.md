@@ -30,7 +30,7 @@ Orbit below the surface for underwater mode. A boat leaves a wake; the red buoy 
 ## Install
 
 ```bash
-npm install seedocean three
+pnpm add seedocean three
 ```
 
 Requires **WebGPU** (Chrome/Edge 113+).
@@ -99,15 +99,15 @@ Re-exports: `PRESETS`, `buildFFTOcean`, `BuoyancySampler`, `validateFFT`, …
 ```bash
 git clone https://github.com/reed-soul/SeedOcean.git
 cd SeedOcean
-npm install
-npm run dev      # http://localhost:5391
+pnpm install
+pnpm dev      # http://localhost:5391
 ```
 
 ```bash
-npm run build          # production bundle
-npm run build:pages    # GitHub Pages (base /SeedOcean/)
-npm run test:fft       # GPU FFT self-test (needs Chromium + WebGPU)
-npm run capture        # regenerate docs/assets screenshots + GIF
+pnpm build          # production bundle
+pnpm build:pages    # GitHub Pages (base /SeedOcean/)
+pnpm test:fft       # GPU FFT self-test (needs Chromium + WebGPU)
+pnpm capture        # regenerate docs/assets screenshots + GIF
 ```
 
 ## Roadmap

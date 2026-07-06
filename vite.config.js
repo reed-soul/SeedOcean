@@ -4,14 +4,6 @@ import { defineConfig } from 'vite';
 // gh-pages mode sets base for https://reed-soul.github.io/SeedOcean/
 export default defineConfig(({ mode }) => ({
   base: mode === 'gh-pages' ? '/SeedOcean/' : '/',
-  esbuild: {
-    target: 'esnext',
-  },
-  optimizeDeps: {
-    esbuildOptions: {
-      target: 'esnext',
-    },
-  },
   build: {
     target: 'esnext',
   },
