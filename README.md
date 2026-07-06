@@ -2,31 +2,46 @@
 
 # SeedOcean
 
-**Open-source procedural ocean and water system for Three.js (WebGPU).**
+**Open-source FFT ocean system for Three.js — WebGPU first, WebGL2 fallback.**
 
-Inspired by [SeedThree](https://github.com/SkyeShark/SeedThree) — live preset tuning, scene, one-click glTF export — for the scarce browser-ocean space.
+Persistent foam · 10 sea-state presets · buoyancy · underwater · spray & rain · TypeScript · `<water-canvas>`.
 
 [![CI](https://github.com/reed-soul/SeedOcean/actions/workflows/ci.yml/badge.svg)](https://github.com/reed-soul/SeedOcean/actions/workflows/ci.yml)
 [![Live demo](https://img.shields.io/badge/demo-GitHub%20Pages-0a5f7a)](https://reed-soul.github.io/SeedOcean/)
+[![npm](https://img.shields.io/badge/version-v0.6.0--alpha-blue)](#)
 
-![SeedOcean surface demo](docs/assets/surface.png)
+![SeedOcean hero](docs/assets/hero.png)
 
 </div>
 
-> **Status: `v0.6.0-alpha`.** FFT ocean with persistent/advected foam, a 10-preset library, a 256² quality mode, TypeScript types, a `<water-canvas>` web component, atmospheric spray + rain, and a WebGL2/Gerstner fallback that keeps the API identical when WebGPU is unavailable.
+<table align="center">
+  <tr>
+    <td width="33%"><sub>Dawn Glass</sub><br><img src="docs/assets/presets/dawn.png"></td>
+    <td width="33%"><sub>Coastal Chop</sub><br><img src="docs/assets/presets/coastal.png"></td>
+    <td width="33%"><sub>Long Swell</sub><br><img src="docs/assets/presets/swell.png"></td>
+  </tr>
+  <tr>
+    <td width="33%"><sub>Golden Sunset</sub><br><img src="docs/assets/presets/sunset.png"></td>
+    <td width="33%"><sub>Open Storm</sub><br><img src="docs/assets/presets/storm.png"></td>
+    <td width="33%"><sub>Tempest</sub><br><img src="docs/assets/presets/tempest.png"></td>
+  </tr>
+</table>
+
+> **Status: `v0.6.0-alpha`.** Six showcase presets above; four more in the live demo. FFT ocean with persistent/advected foam, a 256² quality mode, TypeScript types, a `<water-canvas>` web component, atmospheric spray + rain, and a WebGL2/Gerstner fallback that keeps the API identical when WebGPU is unavailable.
 
 ## Live demo
 
 **https://reed-soul.github.io/SeedOcean/**
 
-Orbit below the surface for underwater mode. A boat leaves a wake; the red buoy and wooden crates float on the live wave field.
+Orbit below the surface for underwater mode. A boat leaves a wake; the red buoy and wooden crates float on the live wave field. Try the **Tempest** preset for wind-blown spray and rain.
 
 | Surface + wake | Underwater caustics |
 |---|---|
 | ![Wake and refraction](docs/assets/wake.png) | ![Underwater](docs/assets/underwater.png) |
 
-![Animated demo](docs/assets/demo.gif)
+![Animated demo — coastal → storm sweep](docs/assets/demo.gif)
 
+</div>
 ## Install
 
 ```bash
