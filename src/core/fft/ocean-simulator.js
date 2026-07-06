@@ -45,9 +45,14 @@ export class OceanSimulator {
         ffts.push(this.fft.buildField(c[name], scratch));
       }
     }
+    // Dispatch order: h-steps (by stage) → align if logN odd → v-steps (by stage)
+    // → align if logN odd → permute. The align stages copy scratch → field so the
+    // result-owner is always `field`, regardless of logN parity (see FFT.buildField).
     this.stepGroups = [];
     for (let s = 0; s < this.fft.logN; s++) this.stepGroups.push(ffts.map((f) => f.h[s]));
+    if (this.fft.logN % 2 === 1) this.stepGroups.push(ffts.map((f) => f.align));
     for (let s = 0; s < this.fft.logN; s++) this.stepGroups.push(ffts.map((f) => f.v[s]));
+    if (this.fft.logN % 2 === 1) this.stepGroups.push(ffts.map((f) => f.align));
     this.stepGroups.push(ffts.map((f) => f.permute));
 
     this.lambda = uniform(params.lambda);

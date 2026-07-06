@@ -86,7 +86,19 @@ export class FFT {
       h.push(this._hStep(field, scratch, s));
       v.push(this._vStep(field, scratch, s));
     }
-    return { h, v, permute: this._permute(field) };
+    // Each axis runs logN steps. With ping-pong (s even → write scratch, s odd
+    // → write field), the final result lands in `scratch` when logN is odd and
+    // in `field` when logN is even. The permute step and downstream consumers
+    // always read `field`, so when logN is odd we must copy scratch → field.
+    // One extra dispatch keeps the result-owner contract uniform for any N.
+    const N = this.N;
+    const align = (this.logN % 2 === 1)
+      ? Fn(() => {
+          const id = instanceIndex;
+          field.element(id).assign(scratch.element(id));
+        })().compute(N * N)
+      : null;
+    return { h, v, permute: this._permute(field), align };
   }
 }
 
@@ -100,7 +112,9 @@ export async function validateFFT(renderer, N) {
     fill(field.value.array);
     field.value.needsUpdate = true;
     for (const s of k.h) renderer.compute(s);
+    if (k.align) renderer.compute(k.align);   // h-group → field
     for (const s of k.v) renderer.compute(s);
+    if (k.align) renderer.compute(k.align);   // v-group → field
     renderer.compute(k.permute);
     return new Float32Array(await renderer.getArrayBufferAsync(field.value));
   }
