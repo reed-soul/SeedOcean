@@ -1,14 +1,16 @@
 // Capture README hero, preset matrix, and feature shots from the live demo.
 //
 // v0.6 layout:
-//   docs/assets/hero.png            — big top-of-README hero (storm, low angle)
-//   docs/assets/presets/<id>.png    — one thumbnail per showcase preset
-//   docs/assets/wake.png            — boat + wake close-up (coastal)
-//   docs/assets/underwater.png      — below-surface (coastal)
+//   docs/assets/hero.webp           — big top-of-README hero (storm, low angle)
+//   docs/assets/presets/<id>.webp   — one thumbnail per showcase preset
+//   docs/assets/wake.webp           — boat + wake close-up (coastal)
+//   docs/assets/underwater.webp     — below-surface (coastal)
 //   docs/assets/demo.gif            — animated loop (coastal → storm sweep)
 //
-// Each preset shot waits SETTLE_MS for persistent foam / rain / spray to reach
-// steady state before capturing.
+// Screenshots are captured as PNG (playwright output) then transcoded to WebP
+// q85 via cwebp — ~85% smaller than PNG with no visible banding on the smooth
+// gradients of sky and water. Each preset shot waits SETTLE_MS for persistent
+// foam / rain / spray to reach steady state before capturing.
 
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile, rm } from 'node:fs/promises';
@@ -52,6 +54,14 @@ function run(cmd, args, opts = {}) {
     const p = spawn(cmd, args, { stdio: 'inherit', ...opts });
     p.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} exited ${code}`))));
   });
+}
+
+/** Capture via playwright as PNG, then transcode to WebP q85 (no banding). */
+async function shot(page, webpPath) {
+  const tmpPng = webpPath.replace(/\.webp$/, '.png');
+  await page.screenshot({ path: tmpPng });
+  await run('cwebp', ['-q', '85', '-quiet', tmpPng, '-o', webpPath]);
+  await rm(tmpPng, { force: true });
 }
 
 async function setCamera(page, cam, look) {
@@ -99,7 +109,7 @@ try {
   await applyPreset(page, 'storm');
   await setCamera(page, [4, 7, 30], [0, 1, -4]);
   await page.waitForTimeout(SETTLE_MS);
-  await page.screenshot({ path: path.join(OUT, 'hero.png') });
+  await shot(page, path.join(OUT, 'hero.webp'));
   console.log('Wrote docs/assets/hero.png');
 
   // ---- Preset matrix ----
@@ -110,7 +120,7 @@ try {
     await applyPreset(page, id);
     await setCamera(page, cam, look);
     await page.waitForTimeout(SETTLE_MS);
-    await page.screenshot({ path: path.join(presetDir, `${id}.png`) });
+    await shot(page, path.join(presetDir, `${id}.webp`));
     console.log(`Wrote docs/assets/presets/${id}.png`);
   }
 
@@ -118,7 +128,7 @@ try {
   await applyPreset(page, 'coastal');
   await setCamera(page, [-6, 5, 28], [-12, 1, 10]);
   await page.waitForTimeout(SETTLE_MS);
-  await page.screenshot({ path: path.join(OUT, 'wake.png') });
+  await shot(page, path.join(OUT, 'wake.webp'));
   console.log('Wrote docs/assets/wake.png');
 
   await page.evaluate(() => {
@@ -129,7 +139,7 @@ try {
     }
   });
   await page.waitForTimeout(SETTLE_MS);
-  await page.screenshot({ path: path.join(OUT, 'underwater.png') });
+  await shot(page, path.join(OUT, 'underwater.webp'));
   console.log('Wrote docs/assets/underwater.png');
 
   // ---- GIF: slow preset sweep (coastal → swell → gale → storm) ----

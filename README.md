@@ -10,20 +10,20 @@ Persistent foam · 10 sea-state presets · buoyancy · underwater · spray & rai
 [![Live demo](https://img.shields.io/badge/demo-GitHub%20Pages-0a5f7a)](https://reed-soul.github.io/SeedOcean/)
 [![npm](https://img.shields.io/badge/version-v0.6.0--alpha-blue)](#)
 
-![SeedOcean hero](docs/assets/hero.png)
+![SeedOcean hero](docs/assets/hero.webp)
 
 </div>
 
 <table align="center">
   <tr>
-    <td width="33%"><sub>Dawn Glass</sub><br><img src="docs/assets/presets/dawn.png"></td>
-    <td width="33%"><sub>Coastal Chop</sub><br><img src="docs/assets/presets/coastal.png"></td>
-    <td width="33%"><sub>Long Swell</sub><br><img src="docs/assets/presets/swell.png"></td>
+    <td width="33%"><sub>Dawn Glass</sub><br><img src="docs/assets/presets/dawn.webp"></td>
+    <td width="33%"><sub>Coastal Chop</sub><br><img src="docs/assets/presets/coastal.webp"></td>
+    <td width="33%"><sub>Long Swell</sub><br><img src="docs/assets/presets/swell.webp"></td>
   </tr>
   <tr>
-    <td width="33%"><sub>Golden Sunset</sub><br><img src="docs/assets/presets/sunset.png"></td>
-    <td width="33%"><sub>Open Storm</sub><br><img src="docs/assets/presets/storm.png"></td>
-    <td width="33%"><sub>Tempest</sub><br><img src="docs/assets/presets/tempest.png"></td>
+    <td width="33%"><sub>Golden Sunset</sub><br><img src="docs/assets/presets/sunset.webp"></td>
+    <td width="33%"><sub>Open Storm</sub><br><img src="docs/assets/presets/storm.webp"></td>
+    <td width="33%"><sub>Tempest</sub><br><img src="docs/assets/presets/tempest.webp"></td>
   </tr>
 </table>
 
@@ -37,7 +37,7 @@ Orbit below the surface for underwater mode. A boat leaves a wake; the red buoy 
 
 | Surface + wake | Underwater caustics |
 |---|---|
-| ![Wake and refraction](docs/assets/wake.png) | ![Underwater](docs/assets/underwater.png) |
+| ![Wake and refraction](docs/assets/wake.webp) | ![Underwater](docs/assets/underwater.webp) |
 
 ![Animated demo — coastal → storm sweep](docs/assets/demo.gif)
 
