@@ -78,9 +78,9 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading, wakeFi
 
     const foamRaw = float(0).toVar();
     cascades.forEach((c, i) => {
-      if (i >= cascades.length - 1) return;
-      const turb = texture(c.displacement, worldXZ.div(lengthScales[i])).w;
-      foamRaw.addAssign(saturate(shading.foamThreshold.sub(turb).mul(shading.foamScale)));
+      // Advected/persistent foam (0..~several). Threshold + scale map it to coverage.
+      const foam = texture(c.foam, worldXZ.div(lengthScales[i])).x;
+      foamRaw.addAssign(saturate(foam.sub(shading.foamThreshold).mul(shading.foamScale)));
     });
 
     if (wakeTex) {

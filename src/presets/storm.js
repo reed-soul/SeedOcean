@@ -22,6 +22,8 @@ export const storm = {
   causticColor: 0x2a6a7a,
   causticStrength: 0.4,
   seafloorDepth: -32,
+  sprayIntensity: 0.7,
+  rainIntensity: 0.5,
   sky: { elevation: 8, azimuth: 210, exposure: 0.22, turbidity: 14, cloudCoverage: 0.72 },
   spectrum: {
     lambda: 1.55,

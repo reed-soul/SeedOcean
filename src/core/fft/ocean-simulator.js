@@ -52,15 +52,22 @@ export class OceanSimulator {
 
     this.lambda = uniform(params.lambda);
     this.dt = uniform(1 / 60);
-    this.foamDecay = uniform(params.foamDecay);
+    // foamPersistence: 0 = instantaneous (legacy), 1 = foam holds indefinitely.
+    this.foamPersistence = uniform(params.foamPersistence ?? (1 - (params.foamDecay ?? 0.45)));
+
     this.assembleGroup = [];
+    this.advectGroup = [];
+    this.cascadeMaps = [];
     for (const c of this.cascades) {
       const maps = createCascadeMaps(c, {
-        N: this.N, lambda: this.lambda, dt: this.dt, foamDecay: this.foamDecay,
+        N: this.N, lambda: this.lambda, dt: this.dt, foamDecay: this.foamPersistence,
       });
       c.displacement = maps.displacement;
       c.derivatives = maps.derivatives;
+      c.foam = maps.foam;
       this.assembleGroup.push(maps.assemble);
+      this.advectGroup.push(maps.advect);
+      this.cascadeMaps.push(maps);
     }
   }
 
@@ -79,7 +86,7 @@ export class OceanSimulator {
     this.params = params;
     applySpectrumParams(this.shared, params);
     this.lambda.value = params.lambda;
-    this.foamDecay.value = params.foamDecay;
+    this.foamPersistence.value = params.foamPersistence ?? (1 - (params.foamDecay ?? 0.45));
   }
 
   async updateInitialSpectrum() {
@@ -95,6 +102,11 @@ export class OceanSimulator {
     this.dt.value = dt;
     this.renderer.compute(this.timeDepGroup);
     for (const group of this.stepGroups) this.renderer.compute(group);
+    // Foam: assemble writes displacement (.w = breaking source); swap so advect
+    // reads prev frame's foam; advect; swap again so `c.foam` holds fresh state.
     this.renderer.compute(this.assembleGroup);
+    for (const m of this.cascadeMaps) m.swapFoam();
+    this.renderer.compute(this.advectGroup);
+    for (const m of this.cascadeMaps) m.swapFoam();
   }
 }

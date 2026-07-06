@@ -10,9 +10,10 @@ import { buildClipmapMesh } from './clipmap.js';
  * @param {import('three/webgpu').WebGPURenderer} renderer
  * @param {object} preset
  * @param {object} state — live UI state
+ * @param {'perf'|'quality'} [quality='perf'] — selects FFT grid size (128² vs 256²)
  */
-export async function buildFFTOcean(renderer, preset, state) {
-  const spectrumParams = buildSpectrumParams(preset, state);
+export async function buildFFTOcean(renderer, preset, state, quality = 'perf') {
+  const spectrumParams = buildSpectrumParams(preset, state, quality);
   const simulator = new OceanSimulator(renderer, spectrumParams);
   await simulator.updateInitialSpectrum();
 
@@ -35,7 +36,7 @@ export async function buildFFTOcean(renderer, preset, state) {
   clipmap.root.add(surfaceReflector.target);
 
   function applyPreset(nextPreset, nextState) {
-    const params = buildSpectrumParams(nextPreset, nextState);
+    const params = buildSpectrumParams(nextPreset, nextState, quality);
     simulator.setSeed(nextState.seed);
     simulator.applyParams(params);
     applyShadingUniforms(shading, nextPreset, nextState);
@@ -43,7 +44,7 @@ export async function buildFFTOcean(renderer, preset, state) {
   }
 
   function applyLiveTuning(nextPreset, nextState) {
-    const params = buildSpectrumParams(nextPreset, nextState);
+    const params = buildSpectrumParams(nextPreset, nextState, quality);
     simulator.applyParams(params);
     applyShadingUniforms(shading, nextPreset, nextState);
   }

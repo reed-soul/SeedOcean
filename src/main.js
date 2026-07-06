@@ -16,8 +16,7 @@ const fail = (msg) => {
 };
 
 if (!WebGPU.isAvailable()) {
-  fail('WebGPU is required. Use Chrome 113+ or Edge 113+.');
-  throw new Error('WebGPU unavailable');
+  console.warn('WebGPU unavailable — running in WebGL2 fallback mode (Gerstner waves).');
 }
 
 let seedOcean;
@@ -27,6 +26,7 @@ async function init() {
   seedOcean = await SeedOcean.create({
     container: app,
     demoObjects: true,
+    quality: 'quality',
   });
 
   controls = new OrbitControls(seedOcean.camera, seedOcean.renderer.domElement);

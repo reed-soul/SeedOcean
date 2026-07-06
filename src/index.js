@@ -8,3 +8,8 @@ export { createUnderwaterPipeline } from './core/underwater-post.js';
 export { buildSeafloor } from './core/seafloor.js';
 export { exportFFTOceanGLB } from './core/export-glb.js';
 export { stateFromPreset } from './ui/controls.js';
+
+// Auto-registering <water-canvas> custom element. Importing this side-effect
+// module registers the element; it also re-exports the class for tests.
+export { SeedOceanCanvas } from './web-component.js';
+

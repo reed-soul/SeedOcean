@@ -12,9 +12,17 @@
       async function run() {
         const renderer = new THREE.WebGPURenderer();
         await renderer.init();
-        const result = await validateFFT(renderer, 128);
-        window.__FFT_RESULT__ = result;
-        document.body.dataset.status = result.pass ? 'pass' : 'fail';
+        const r128 = await validateFFT(renderer, 128);
+        const r256 = await validateFFT(renderer, 256);
+        const combined = {
+          pass: r128.pass && r256.pass,
+          n128: r128,
+          n256: r256,
+          err1: Math.max(r128.err1, r256.err1),
+          err2: Math.max(r128.err2, r256.err2),
+        };
+        window.__FFT_RESULT__ = combined;
+        document.body.dataset.status = combined.pass ? 'pass' : 'fail';
       }
 
       run().catch((e) => {

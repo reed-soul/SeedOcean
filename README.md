@@ -13,7 +13,7 @@ Inspired by [SeedThree](https://github.com/SkyeShark/SeedThree) — live preset 
 
 </div>
 
-> **Status: `v0.5.0-alpha`.** Full surface pipeline, screen-space refraction/reflection, wake interaction, multi-body buoyancy, and shared underwater caustics.
+> **Status: `v0.6.0-alpha`.** FFT ocean with persistent/advected foam, a 10-preset library, a 256² quality mode, TypeScript types, a `<water-canvas>` web component, atmospheric spray + rain, and a WebGL2/Gerstner fallback that keeps the API identical when WebGPU is unavailable.
 
 ## Live demo
 
@@ -54,7 +54,8 @@ const ocean = await SeedOcean.create({
   renderer,
   scene,
   camera,
-  preset: 'coastal',   // calm | coastal | storm
+  preset: 'coastal',   // any of the 10 presets
+  quality: 'quality',  // 'perf' (128²) | 'quality' (256²)
 });
 
 function animate() {
@@ -62,6 +63,13 @@ function animate() {
   requestAnimationFrame(animate);
 }
 animate();
+```
+
+Or drop in the web component — no bootstrap code needed:
+
+```html
+<script type="module">import 'seedocean/web-component.js';</script>
+<water-canvas preset="coastal" quality="quality" demo></water-canvas>
 ```
 
 ### API
@@ -82,17 +90,20 @@ Re-exports: `PRESETS`, `buildFFTOcean`, `BuoyancySampler`, `validateFFT`, …
 
 ## What's in it
 
-- **FFT / JONSWAP ocean** — GPU butterfly IFFT, 3 cascades (200 m / 20 m / 3.5 m)
+- **FFT / JONSWAP ocean** — GPU butterfly IFFT, 3 cascades (200 m / 20 m / 3.5 m), TMA shallow-water correction, dual wind-sea + swell bands
+- **Persistent / advected foam** — ping-pong foam field, half-Lagrangian back-trace, live-tunable `foamPersistence`
+- **Quality mode** — `quality: 'perf' | 'quality'` selects 128² vs 256² FFT grids
 - **Infinite clipmap** — camera-snapped nested rings (~1.5 km)
 - **Subsurface scattering** — sun-lit crest glow
-- **Jacobian foam** — breaking crest detection
 - **Screen refraction / reflection** — viewport backdrop + planar reflector
 - **Wake field** — boat stamps height + foam into a tiling CPU texture
 - **Multi-body buoyancy** — spring-damper physics with pitch/roll
 - **Underwater rendering** — depth tint, Snell's window, god rays
 - **Shared caustics** — sea floor, buoy, boat hull, floating crates
-- **Optimized readback** — buoyancy samples cascade 0 only
-- **Three presets** + **glTF export**
+- **Atmosphere** — wind-blown sea spray at breaking crests + a screen rain layer (zero-cost when intensity is 0)
+- **WebGL2 fallback** — when WebGPU is unavailable, a Gerstner-wave renderer keeps the same API and visual identity
+- **10 presets** — Calm Bay · Dawn Glass · Sea Mist · Light Breeze · Coastal Chop · Long Swell · Golden Sunset · Gale · Open Storm · Tempest
+- **TypeScript types** + **`<water-canvas>` web component** + **glTF export**
 
 ## Run locally
 
@@ -119,18 +130,24 @@ pnpm capture        # regenerate docs/assets screenshots + GIF
 | 3 ✅ | Clipmap, SSS, 3rd cascade |
 | 4 ✅ | Underwater, caustics, buoyancy |
 | 5 ✅ | Refraction/reflection, wake, multi-body physics |
-| 6 ✅ | GitHub Pages, npm API, CI *(this release)* |
+| 6 ✅ | GitHub Pages, npm API, CI |
+| 7 ✅ | v0.6 — 10 presets, quality mode, persistent foam, TS types, web component, spray/rain, WebGL2 fallback *(current)* |
+| 8 🔜 | Rivers / shoreline editor / flowmap painter |
 
 ## Layout
 
 ```
 src/
   index.js            public API
-  seedocean.js        SeedOcean.create()
-  core/fft/           spectrum · IFFT · cascades · surface material
+  seedocean.js        SeedOcean.create() — WebGPU + WebGL2 dispatch
+  seedocean.d.ts      TypeScript declarations
+  web-component.js    <water-canvas> custom element
+  core/fft/           spectrum · IFFT · cascades · advected foam · surface material
+  core/fallback/      gerstner-ocean.js — WebGL2 path
+  core/atmosphere.js  spray + rain
   core/wake-field.js  CPU wake texture
   core/caustics.js    shared underwater caustic pattern
-  presets/            calm · coastal · storm
+  presets/            10 named sea states
 ```
 
 ## Reference

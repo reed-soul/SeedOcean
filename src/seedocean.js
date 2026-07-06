@@ -3,6 +3,7 @@
 import * as THREE from 'three/webgpu';
 import { uniform } from 'three/tsl';
 import { buildFFTOcean } from './core/fft-ocean.js';
+import { buildGerstnerOcean } from './core/fallback/gerstner-ocean.js';
 import { validateFFT } from './core/fft/fft.js';
 import { buildEnvironment } from './core/environment.js';
 import { exportFFTOceanGLB } from './core/export-glb.js';
@@ -10,12 +11,13 @@ import { BuoyancySampler } from './core/buoyancy.js';
 import { BuoyancySystem, BuoyancyBody } from './core/buoyancy-body.js';
 import { buildSeafloor } from './core/seafloor.js';
 import { buildBoat } from './core/boat.js';
+import { buildAtmosphere } from './core/atmosphere.js';
 import { createSubmergedMaterial } from './core/submerged-material.js';
 import { createUnderwaterPipeline } from './core/underwater-post.js';
 import { PRESETS, DEFAULT_PRESET } from './presets/index.js';
 import { stateFromPreset } from './ui/controls.js';
 
-const VERSION = '0.5.0-alpha';
+const VERSION = '0.6.0-alpha';
 
 const ABOVE_FOG = { color: 0x4a90b8, density: 0.00085 };
 const BELOW_FOG = { color: 0x032838, density: 0.0032 };
@@ -34,7 +36,8 @@ const BELOW_FOG = { color: 0x032838, density: 0.0032 };
  * @property {boolean} [buoyancy=true]
  * @property {boolean} [demoObjects=false] — buoy, boat, crates
  * @property {boolean} [validateFFT=true]
- * @property {number} [fftGrid=128]
+ * @property {number} [fftGrid=128] — size used only by the FFT self-test
+ * @property {'perf'|'quality'} [quality='perf'] — 128² vs 256² simulation grid
  */
 
 export class SeedOcean {
@@ -54,6 +57,7 @@ export class SeedOcean {
     this._ownsRenderer = !options.renderer;
     this._ownsScene = !options.scene;
     this._ownsCamera = !options.camera;
+    this.quality = options.quality === 'quality' ? 'quality' : 'perf';
   }
 
   async _init() {
@@ -62,10 +66,18 @@ export class SeedOcean {
     this.preset = typeof presetInput === 'string' ? PRESETS[presetInput] : presetInput;
     this.state = { ...stateFromPreset(this.preset), ...(opts.state ?? {}) };
 
+    // Detect WebGPU once. When unavailable we fall back to the Gerstner-wave
+    // renderer (no compute shaders) but keep the public API identical.
+    this.isWebGPU = await (async () => {
+      if (typeof navigator === 'undefined' || !navigator.gpu) return false;
+      try { return Boolean(await navigator.gpu.requestAdapter()); }
+      catch { return false; }
+    })();
+
     if (opts.renderer) {
       this.renderer = opts.renderer;
     } else {
-      this.renderer = new THREE.WebGPURenderer({ antialias: true });
+      this.renderer = new THREE.WebGPURenderer({ antialias: true, forceWebGL: !this.isWebGPU });
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       this.renderer.setSize(window.innerWidth, window.innerHeight);
       if (opts.container) opts.container.appendChild(this.renderer.domElement);
@@ -93,7 +105,7 @@ export class SeedOcean {
 
     await this.renderer.init();
 
-    if (opts.validateFFT !== false) {
+    if (this.isWebGPU && opts.validateFFT !== false) {
       this.fftTest = await validateFFT(this.renderer, opts.fftGrid ?? 128);
     }
 
@@ -104,7 +116,11 @@ export class SeedOcean {
       this.scene.add(this.env.hemi);
     }
 
-    this.ocean = await buildFFTOcean(this.renderer, this.preset, this.state);
+    if (this.isWebGPU) {
+      this.ocean = await buildFFTOcean(this.renderer, this.preset, this.state, this.quality);
+    } else {
+      this.ocean = await buildGerstnerOcean(this.renderer, this.preset, this.state);
+    }
     this.scene.add(this.ocean.root);
     this.ocean.updateClipmap(this.camera);
 
@@ -115,8 +131,15 @@ export class SeedOcean {
       this.scene.add(this.seafloor.mesh);
     }
 
-    if (opts.buoyancy !== false) {
+    if (this.isWebGPU && opts.buoyancy !== false) {
       this.buoyancy = new BuoyancySampler(this.ocean.simulator, 3);
+      this.buoyancySystem = new BuoyancySystem(this.buoyancy);
+    } else if (opts.buoyancy !== false) {
+      // Fallback: analytical Gerstner sampler (no GPU readback).
+      this.buoyancy = { getHeight: (x, z) => this.ocean.getHeight(x, z), getSlope: () => ({ dx: 0, dz: 0 }), requestReadback: () => null, underwaterMix: (camY, x, z) => {
+        const s = this.ocean.getHeight(x, z);
+        return Math.min(1, Math.max(0, (s - camY + 0.25) / 1.2));
+      } };
       this.buoyancySystem = new BuoyancySystem(this.buoyancy);
     }
 
@@ -124,15 +147,24 @@ export class SeedOcean {
       this._buildDemoObjects();
     }
 
-    if (opts.underwater !== false) {
+    if (this.isWebGPU && opts.underwater !== false) {
       this.underwater = createUnderwaterPipeline(this.renderer, this.scene, this.camera);
       this.underwater.setPreset(this.preset);
     }
 
+    // Spray + rain (atmosphere). Zero-cost when both intensities are zero.
+    this.atmosphere = buildAtmosphere({
+      sprayIntensity: this.preset.sprayIntensity ?? 0,
+      rainIntensity: this.preset.rainIntensity ?? 0,
+      windDirection: this.state.windDirection,
+      windSpeed: this.preset.spectrum?.local?.windSpeed ?? 10,
+    });
+    this.scene.add(this.atmosphere.group);
+
     this.syncSky();
 
     this.ocean.evolve(0, 1 / 60, this.state.waveSpeed);
-    if (this.buoyancy) await this.buoyancy.requestReadback(this.renderer);
+    if (this.buoyancy?.requestReadback) await this.buoyancy.requestReadback(this.renderer);
   }
 
   _buildDemoObjects() {
@@ -206,6 +238,7 @@ export class SeedOcean {
     else Object.assign(this.state, stateFromPreset(this.preset));
     await this.ocean.applyPreset(this.preset, this.state);
     this.underwater?.setPreset(this.preset);
+    this.atmosphere?.applyPreset(this.preset);
     this.applyLiveTuning();
     this.syncSky();
   }
@@ -215,6 +248,10 @@ export class SeedOcean {
     if (this.underwater) {
       this.underwater.uniforms.godRayStrength.value =
         this.state.godRayStrength ?? this.preset.godRayStrength ?? 0.22;
+    }
+    if (this.atmosphere) {
+      this.atmosphere.state.windDirection = this.state.windDirection;
+      this.atmosphere.state.windSpeed = this.preset.spectrum?.local?.windSpeed ?? 10;
     }
     this.renderer.toneMappingExposure = this.state.exposure;
   }
@@ -285,6 +322,14 @@ export class SeedOcean {
     this.buoyancySystem?.update(delta);
     if (this.boat) this._stampWake(this.boat, delta, 5.5, 1.35);
 
+    if (this.atmosphere) {
+      this.atmosphere.update(delta, {
+        camera: this.camera,
+        sampler: this.buoyancy,
+        wake: this.ocean.wakeField,
+      });
+    }
+
     return { t, dt: delta, underwaterMix: uMix };
   }
 
@@ -309,6 +354,11 @@ export class SeedOcean {
     const t = this.clock.getElapsedTime();
     this.ocean.evolve(t, 1 / 60, this.state.waveSpeed);
     const slug = this.preset.id;
+    if (!this.isWebGPU) {
+      // Fallback path has no FFT simulator to bake; export the current mesh as-is.
+      console.warn('glTF export on WebGL2 fallback exports the Gerstner mesh without FFT displacement.');
+      return;
+    }
     await exportFFTOceanGLB(
       this.renderer,
       this.ocean.root,

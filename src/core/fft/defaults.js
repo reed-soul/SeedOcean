@@ -34,17 +34,29 @@ export const FFT_DEFAULTS = {
   },
 };
 
-/** Merge preset.spectrum overrides onto defaults. */
-export function buildSpectrumParams(preset, state) {
+/**
+ * Quality presets. `perf` ships the default 128² grid for broad device coverage;
+ * `quality` bumps to 256² (4× the GPU work) to match the wave detail of paid
+ * ocean systems on capable hardware. An explicit `spectrum.N` always wins.
+ */
+export const QUALITY_GRID = { perf: 128, quality: 256 };
+
+/** Merge preset.spectrum overrides onto defaults. `quality` selects the default N. */
+export function buildSpectrumParams(preset, state, quality = 'perf') {
   const s = preset.spectrum ?? {};
   const windDir = state.windDirection ?? s.windDirection ?? preset.sky?.azimuth ?? 45;
   const amp = state.waveAmp ?? 1;
+  const baseN = QUALITY_GRID[quality] ?? FFT_DEFAULTS.N;
 
   return {
     ...FFT_DEFAULTS,
     seed: state.seed,
     lambda: (s.lambda ?? FFT_DEFAULTS.lambda) * (0.7 + amp * 0.3),
     foamDecay: s.foamDecay ?? FFT_DEFAULTS.foamDecay,
+    // foamPersistence: live-tunable; 0 = instantaneous foam, 1 = foam holds indefinitely.
+    foamPersistence: state.foamPersistence
+      ?? s.foamPersistence
+      ?? (1 - (s.foamDecay ?? FFT_DEFAULTS.foamDecay)),
     local: {
       ...FFT_DEFAULTS.local,
       ...(s.local ?? {}),
@@ -55,6 +67,6 @@ export function buildSpectrumParams(preset, state) {
     swell: { ...FFT_DEFAULTS.swell, ...(s.swell ?? {}) },
     lengthScales: s.lengthScales ?? FFT_DEFAULTS.lengthScales,
     cascades: s.cascades ?? FFT_DEFAULTS.cascades,
-    N: s.N ?? FFT_DEFAULTS.N,
+    N: s.N ?? baseN,
   };
 }

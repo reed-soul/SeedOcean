@@ -24,6 +24,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
       - run: pnpm run build:pages
+      - name: Type-check
+        run: pnpm run build:types
 
   fft-selftest:
     runs-on: ubuntu-latest

@@ -69,10 +69,15 @@ try {
   await browser.close();
 
   if (status === 'pass') {
-    console.log(`FFT self-test passed (impulse err=${result.err1}, freq err=${result.err2})`);
+    console.log(
+      `FFT self-test passed — N=128 (impulse ${result.n128.err1}, freq ${result.n128.err2}), ` +
+      `N=256 (impulse ${result.n256.err1}, freq ${result.n256.err2})`,
+    );
     exitCode = 0;
   } else if (status === 'fail') {
-    console.error(`FFT self-test failed (impulse err=${result?.err1}, freq err=${result?.err2})`);
+    console.error(
+      `FFT self-test failed — N=128 ${JSON.stringify(result?.n128)}, N=256 ${JSON.stringify(result?.n256)}`,
+    );
   } else {
     console.error(`FFT self-test error: ${error ?? 'unknown'}`);
   }

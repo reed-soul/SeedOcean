@@ -1,6 +1,6 @@
 {
   "name": "seedocean",
-  "version": "0.5.0-alpha",
+  "version": "0.6.0-alpha",
   "packageManager": "pnpm@10.32.1",
   "type": "module",
   "license": "MIT",
@@ -24,9 +24,14 @@
   ],
   "main": "./src/index.js",
   "module": "./src/index.js",
+  "types": "./src/seedocean.d.ts",
   "exports": {
-    ".": "./src/index.js",
-    "./presets": "./src/presets/index.js"
+    ".": {
+      "types": "./src/seedocean.d.ts",
+      "import": "./src/index.js"
+    },
+    "./presets": "./src/presets/index.js",
+    "./web-component": "./src/web-component.js"
   },
   "files": [
     "src",
@@ -37,6 +42,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:pages": "vite build --mode gh-pages",
+    "build:types": "tsc -p tsconfig.json",
     "preview": "vite preview --port 5391",
     "test:fft": "node scripts/fft-selftest.mjs",
     "capture": "node scripts/capture-media.mjs"
@@ -50,6 +56,7 @@
   },
   "devDependencies": {
     "playwright": "^1.52.0",
+    "typescript": "^5.6.0",
     "vite": "^8.1.3"
   }
 }
