@@ -8,7 +8,7 @@ Inspired by [SeedThree](https://github.com/SkyeShark/SeedThree) — live preset 
 
 </div>
 
-> **Status: `v0.4.0-alpha`.** Full surface pipeline plus underwater rendering, caustics, buoyancy sampling, and glTF export.
+> **Status: `v0.5.0-alpha`.** Full surface pipeline, screen-space refraction/reflection, wake interaction, multi-body buoyancy, and shared underwater caustics.
 
 ## What's in it
 
@@ -16,9 +16,12 @@ Inspired by [SeedThree](https://github.com/SkyeShark/SeedThree) — live preset 
 - **Infinite clipmap** — camera-snapped nested rings (~1.5 km)
 - **Subsurface scattering** — sun-lit crest glow
 - **Jacobian foam** — breaking crest detection
+- **Screen refraction / reflection** — viewport backdrop + planar reflector on the surface
+- **Wake field** — boat stamps height + foam into a tiling CPU texture sampled on the GPU
+- **Multi-body buoyancy** — spring-damper physics with pitch/roll from wave slope
 - **Underwater rendering** — depth tint, Snell's window, god rays (post-process)
-- **Sea floor caustics** — procedural animated light patterns
-- **Buoyancy sampling** — GPU readback drives floating buoy + camera depth
+- **Shared caustics** — sea floor, buoy, boat hull, and floating crates
+- **Optimized readback** — buoyancy samples cascade 0 only (~3× less GPU transfer)
 - **Three presets** + **glTF export**
 
 ## Roadmap
@@ -28,7 +31,8 @@ Inspired by [SeedThree](https://github.com/SkyeShark/SeedThree) — live preset 
 | 1 ✅ | Scaffold, presets, export |
 | 2 ✅ | WebGPU FFT/IFFT (JONSWAP) |
 | 3 ✅ | Clipmap, SSS, 3rd cascade |
-| 4 ✅ | Underwater, caustics, buoyancy *(this release)* |
+| 4 ✅ | Underwater, caustics, buoyancy |
+| 5 ✅ | Refraction/reflection, wake, multi-body physics *(this release)* |
 
 ## Requirements
 
@@ -41,7 +45,7 @@ npm install
 npm run dev      # http://localhost:5391
 ```
 
-Orbit below the surface to enter underwater mode. The red buoy floats on the live wave field.
+Orbit below the surface for underwater mode. A boat leaves a wake; the red buoy and wooden crates float on the live wave field.
 
 ```bash
 npm run build
@@ -52,12 +56,17 @@ npm run preview
 
 ```
 src/core/
-  fft/              spectrum · IFFT · cascades
-  clipmap.js        infinite ocean mesh
+  fft/                spectrum · IFFT · cascades · surface material
+  clipmap.js          infinite ocean mesh
+  wake-field.js       CPU wake texture (boat interaction)
+  caustics.js         shared underwater caustic pattern
+  submerged-material.js  caustics on floating objects
+  buoyancy-body.js    multi-body spring-damper physics
   underwater-post.js  Snell + fog + god rays
-  seafloor.js       caustic sea floor
-  buoyancy.js       height sampling
-  wave-sampler.js   shared CPU/GPU displacement readback
+  seafloor.js         caustic sea floor
+  buoyancy.js         throttled height readback
+  wave-sampler.js     CPU/GPU displacement sampling
+  boat.js             demo boat mesh
 ```
 
 ## Reference

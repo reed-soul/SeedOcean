@@ -1,6 +1,10 @@
 // Throttled GPU readback for buoyancy and camera underwater state.
 
-import { readCascadeBuffers, sampleOceanHeight, sampleFFTDisplacement } from './wave-sampler.js';
+import {
+  readBuoyancyBuffer,
+  sampleHeightFromBuffer,
+  sampleSlopeFromBuffer,
+} from './wave-sampler.js';
 
 export class BuoyancySampler {
   /**
@@ -11,7 +15,7 @@ export class BuoyancySampler {
     this.simulator = simulator;
     this.interval = interval;
     this.tick = 0;
-    this.buffers = null;
+    this.buffer = null;
     this.pending = null;
   }
 
@@ -20,9 +24,9 @@ export class BuoyancySampler {
     if (this.pending) return this.pending;
     if (++this.tick % this.interval !== 0) return null;
 
-    this.pending = readCascadeBuffers(renderer, this.simulator)
-      .then((buffers) => {
-        this.buffers = buffers;
+    this.pending = readBuoyancyBuffer(renderer, this.simulator, 0)
+      .then((buffer) => {
+        this.buffer = buffer;
         this.pending = null;
       })
       .catch(() => {
@@ -33,13 +37,13 @@ export class BuoyancySampler {
   }
 
   getHeight(x, z) {
-    if (!this.buffers) return 0;
-    return sampleOceanHeight(x, z, this.simulator, this.buffers);
+    if (!this.buffer) return 0;
+    return sampleHeightFromBuffer(x, z, this.buffer);
   }
 
-  getDisplacement(x, z) {
-    if (!this.buffers) return { x: 0, y: 0, z: 0 };
-    return sampleFFTDisplacement(x, z, this.simulator, this.buffers);
+  getSlope(x, z) {
+    if (!this.buffer) return { dx: 0, dz: 0 };
+    return sampleSlopeFromBuffer(x, z, this.buffer);
   }
 
   /** 0 = above surface, 1 = fully submerged (for post-process blend). */

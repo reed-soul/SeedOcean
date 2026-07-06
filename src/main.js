@@ -7,7 +7,10 @@ import { validateFFT } from './core/fft/fft.js';
 import { buildEnvironment } from './core/environment.js';
 import { exportFFTOceanGLB } from './core/export-glb.js';
 import { BuoyancySampler } from './core/buoyancy.js';
+import { BuoyancySystem, BuoyancyBody } from './core/buoyancy-body.js';
 import { buildSeafloor } from './core/seafloor.js';
+import { buildBoat } from './core/boat.js';
+import { createSubmergedMaterial } from './core/submerged-material.js';
 import { createUnderwaterPipeline } from './core/underwater-post.js';
 import { PRESETS, DEFAULT_PRESET } from './presets/index.js';
 import { buildGUI, stateFromPreset } from './ui/controls.js';
@@ -36,7 +39,11 @@ let env;
 let seafloor;
 let underwater;
 let buoyancy;
+let buoyancySystem;
 let buoy;
+let boat;
+let crates;
+let submergedMix;
 let state;
 let clock;
 let preset;
@@ -87,17 +94,74 @@ async function init() {
   ocean.updateClipmap(camera);
 
   buoyancy = new BuoyancySampler(ocean.simulator, 3);
+  buoyancySystem = new BuoyancySystem(buoyancy);
+
+  submergedMix = { value: 0 };
 
   seafloor = buildSeafloor(preset, ocean.shading.sunDir);
   scene.add(seafloor.mesh);
 
+  const buoyMat = createSubmergedMaterial(
+    0xff5533,
+    preset.causticColor ?? 0x3a8a9a,
+    ocean.shading.sunDir,
+    submergedMix,
+    { causticStrength: 0.65 },
+  );
   buoy = new THREE.Mesh(
     new THREE.CylinderGeometry(0.35, 0.5, 1.2, 12),
-    new THREE.MeshStandardNodeMaterial({ color: 0xff5533, roughness: 0.55 }),
+    buoyMat.material,
   );
   buoy.position.set(6, 0.6, -4);
   buoy.name = 'Buoy';
   scene.add(buoy);
+  buoyancySystem.add(new BuoyancyBody(buoy, {
+    buoyancyOffset: 0.75,
+    samples: [[0, 0]],
+    springK: 28,
+    damping: 6,
+  }));
+
+  const boatHullMat = createSubmergedMaterial(
+    0xc8d4dc,
+    preset.causticColor ?? 0x3a8a9a,
+    ocean.shading.sunDir,
+    submergedMix,
+    { causticStrength: 0.48, roughness: 0.45, metalness: 0.12 },
+  );
+  boat = buildBoat(boatHullMat.material);
+  scene.add(boat);
+  buoyancySystem.add(new BuoyancyBody(boat, {
+    buoyancyOffset: 0.35,
+    samples: [[0, 0], [2.2, 0], [-2.2, 0], [0, 0.9], [0, -0.9]],
+    springK: 14,
+    damping: 4.5,
+    maxTilt: 0.22,
+  }));
+
+  crates = [];
+  const cratePositions = [[12, -8], [-10, 14], [18, 6]];
+  for (const [cx, cz] of cratePositions) {
+    const crateMat = createSubmergedMaterial(
+      0xc49a6c,
+      preset.causticColor ?? 0x3a8a9a,
+      ocean.shading.sunDir,
+      submergedMix,
+      { causticStrength: 0.5, roughness: 0.75 },
+    );
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 1.4), crateMat.material);
+    crate.position.set(cx, 0.7, cz);
+    crate.name = 'Crate';
+    scene.add(crate);
+    crates.push(crate);
+    buoyancySystem.add(new BuoyancyBody(crate, {
+      buoyancyOffset: 0.7,
+      samples: [[0, 0]],
+      springK: 32,
+      damping: 7,
+      maxTilt: 0.12,
+    }));
+  }
 
   underwater = createUnderwaterPipeline(renderer, scene, camera);
   underwater.setPreset(preset);
@@ -170,6 +234,15 @@ function onResize() {
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
+function stampObjectWake(object, dt, radius = 4, strength = 1.1) {
+  const body = buoyancySystem.getBody(object);
+  if (!body) return;
+  const vel = body.sampleVelocity(dt);
+  const speed = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+  if (speed < 0.15) return;
+  ocean.stampWake(object.position.x, object.position.z, vel.x, vel.z, radius, strength);
+}
+
 function animate() {
   const dt = clock.getDelta();
   const t = clock.getElapsedTime();
@@ -190,19 +263,20 @@ function animate() {
   underwater.uniforms.underwaterMix.value = uMix;
   ocean.setUnderwaterMix(uMix);
   seafloor.updateUnderwater(uMix);
+  submergedMix.value = uMix;
   applyFogBlend(uMix);
 
-  const buoyY = buoyancy.getHeight(buoy.position.x, buoy.position.z);
-  buoy.position.y = buoyY + 0.75;
+  buoyancySystem.update(dt);
+  stampObjectWake(boat, dt, 5.5, 1.35);
 
   if (hud) {
     const fft = ocean.simulator;
     const mode = uMix > 0.45 ? 'UNDERWATER' : 'surface';
     hud.textContent = [
-      `SeedOcean v0.4.0-alpha · ${mode}`,
+      `SeedOcean v0.5.0-alpha · ${mode}`,
       `${preset.name} · seed ${state.seed}`,
-      `grid ${fft.N}² · ${fft.cascades.length} cascades · buoy y ${buoyY.toFixed(2)}m`,
-      `t ${t.toFixed(1)}s`,
+      `grid ${fft.N}² · ${fft.cascades.length} cascades · boat y ${boat.position.y.toFixed(2)}m`,
+      `wake + refraction · t ${t.toFixed(1)}s`,
     ].join('\n');
   }
 

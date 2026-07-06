@@ -26,6 +26,8 @@ export function buildGUI(ctx) {
   color.add(state, 'sssStrength', 0, 2, 0.01).name('SSS').onChange(() => ctx.onLive());
   color.add(state, 'foamStrength', 0, 1, 0.01).name('Foam').onChange(() => ctx.onLive());
   color.add(state, 'roughness', 0, 1, 0.01).name('Roughness').onChange(() => ctx.onLive());
+  color.add(state, 'refractionStrength', 0, 1, 0.01).name('Refraction').onChange(() => ctx.onLive());
+  color.add(state, 'reflectionStrength', 0, 1, 0.01).name('Reflection').onChange(() => ctx.onLive());
 
   const under = gui.addFolder('Underwater');
   under.add(state, 'godRayStrength', 0, 0.6, 0.01).name('God rays').onChange(() => ctx.onLive());
@@ -53,6 +55,8 @@ export function stateFromPreset(preset) {
     sssStrength: preset.sssStrength ?? 0.85,
     foamStrength: preset.foamStrength,
     roughness: preset.roughness,
+    refractionStrength: preset.refractionStrength ?? 0.72,
+    reflectionStrength: preset.reflectionStrength ?? 0.55,
     godRayStrength: preset.godRayStrength ?? 0.22,
     elevation: preset.sky.elevation,
     azimuth: preset.sky.azimuth,

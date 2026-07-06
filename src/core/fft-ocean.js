@@ -1,5 +1,6 @@
-// FFT ocean integration — simulator + clipmap render mesh.
+// FFT ocean integration — simulator + clipmap render mesh + wake + reflector.
 
+import { WakeField } from './wake-field.js';
 import { OceanSimulator } from './fft/ocean-simulator.js';
 import { createFFTSurfaceMaterial, createShadingUniforms, applyShadingUniforms } from './fft/surface-material.js';
 import { buildSpectrumParams } from './fft/defaults.js';
@@ -15,13 +16,15 @@ export async function buildFFTOcean(renderer, preset, state) {
   const simulator = new OceanSimulator(renderer, spectrumParams);
   await simulator.updateInitialSpectrum();
 
+  const wakeField = new WakeField(512, 220);
   const shading = createShadingUniforms(preset);
   applyShadingUniforms(shading, preset, state);
 
-  const { material } = createFFTSurfaceMaterial(
+  const { material, reflector: surfaceReflector } = createFFTSurfaceMaterial(
     simulator.cascades,
     spectrumParams.lengthScales,
     shading,
+    wakeField,
   );
 
   const clipmap = buildClipmapMesh(material, {
@@ -29,6 +32,7 @@ export async function buildFFTOcean(renderer, preset, state) {
     levels: 4,
     cells: 32,
   });
+  clipmap.root.add(surfaceReflector.target);
 
   function applyPreset(nextPreset, nextState) {
     const params = buildSpectrumParams(nextPreset, nextState);
@@ -50,6 +54,8 @@ export async function buildFFTOcean(renderer, preset, state) {
 
   function evolve(t, dt, timeScale = 1) {
     simulator.evolve(t * timeScale, dt);
+    wakeField.decay(dt);
+    wakeField.upload();
   }
 
   function updateClipmap(camera) {
@@ -61,12 +67,17 @@ export async function buildFFTOcean(renderer, preset, state) {
     shading.underwaterMix.value = mix;
   }
 
+  function stampWake(x, z, vx, vz, radius = 4, strength = 1) {
+    wakeField.stamp(x, z, vx, vz, radius, strength);
+  }
+
   return {
     root: clipmap.root,
     mesh: clipmap.mesh,
     clipmap,
     simulator,
     shading,
+    wakeField,
     spectrumParams,
     applyPreset,
     applyLiveTuning,
@@ -74,5 +85,6 @@ export async function buildFFTOcean(renderer, preset, state) {
     setUnderwaterMix,
     evolve,
     updateClipmap,
+    stampWake,
   };
 }

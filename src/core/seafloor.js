@@ -1,7 +1,8 @@
 // Procedural caustic light patterns on the sea floor.
 
 import * as THREE from 'three/webgpu';
-import { Fn, positionWorld, sin, cos, vec2, mix, color, float, uniform, time, saturate, dot, max } from 'three/tsl';
+import { Fn, positionWorld, mix, uniform, time } from 'three/tsl';
+import { causticsPattern, causticsSunLit } from './caustics.js';
 
 /**
  * @param {object} preset
@@ -16,13 +17,8 @@ export function buildSeafloor(preset, sunDir) {
   const material = new THREE.MeshStandardNodeMaterial({ roughness: 0.95, metalness: 0 });
 
   material.colorNode = Fn(() => {
-    const uv = positionWorld.xz.mul(0.065);
-    const t = time;
-    const layer1 = sin(uv.x.mul(9).add(t.mul(0.7))).mul(sin(uv.y.mul(8).sub(t.mul(0.5))));
-    const layer2 = sin(uv.x.mul(14).sub(t.mul(0.4))).mul(cos(uv.y.mul(11).add(t.mul(0.6))));
-    const caustics = layer1.add(layer2).mul(0.5).add(0.5).pow(2).mul(2.2).saturate();
-
-    const sunLit = saturate(dot(vec3(0, 1, 0), sunDir).mul(0.5).add(0.5));
+    const caustics = causticsPattern(positionWorld.xz, time);
+    const sunLit = causticsSunLit(sunDir);
     const lit = caustics.mul(causticStrength).mul(sunLit).mul(underwaterMix);
     return mix(seafloorColor, causticColor, lit);
   })();

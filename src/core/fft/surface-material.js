@@ -1,14 +1,20 @@
-// FFT ocean surface — world-space sampling, SSS, Jacobian foam.
-// Shading adapted from poseidon (MIT) / gasgiant FFT-Ocean (MIT).
+// FFT ocean surface — world-space sampling, SSS, Jacobian foam, screen refraction/reflection, wake.
 
 import * as THREE from 'three/webgpu';
 import {
-  Fn, positionWorld, cameraPosition, vec2, vec3, vec4, float,
+  Fn, positionWorld, cameraPosition, vec2, vec3, float,
   texture, normalize, dot, max, pow, mix, saturate, smoothstep, uniform, time,
+  screenUV, viewportSafeUV, viewportSharedTexture, reflector, fract,
 } from 'three/tsl';
 import { makeDetailTexture } from './detail-texture.js';
 
-export function createFFTSurfaceMaterial(cascades, lengthScales, shading) {
+/**
+ * @param {import('./ocean-cascade.js').OceanCascade[]} cascades
+ * @param {number[]} lengthScales
+ * @param {ReturnType<typeof createShadingUniforms>} shading
+ * @param {import('../wake-field.js').WakeField} [wakeField]
+ */
+export function createFFTSurfaceMaterial(cascades, lengthScales, shading, wakeField = null) {
   const mat = new THREE.MeshPhysicalNodeMaterial({
     transparent: true,
     side: THREE.DoubleSide,
@@ -18,11 +24,21 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading) {
   const detailTex = makeDetailTexture();
   const worldXZ = positionLocal.xz.add(shading.clipOrigin);
 
+  const wakeTex = wakeField ? texture(wakeField.texture) : null;
+  const wakeExtent = uniform(wakeField?.worldExtent ?? 220);
+
+  const groundReflector = reflector({ resolutionScale: 0.45, bounces: false });
+
   mat.positionNode = Fn(() => {
     const disp = vec3(0).toVar();
     cascades.forEach((c, i) => {
       disp.addAssign(texture(c.displacement, worldXZ.div(lengthScales[i])).xyz);
     });
+    if (wakeTex) {
+      const wakeUV = fract(worldXZ.div(wakeExtent));
+      const wake = wakeTex.sample(wakeUV);
+      disp.y.addAssign(wake.r.div(255).mul(shading.wakeHeight));
+    }
     return positionLocal.add(disp);
   })();
 
@@ -44,13 +60,14 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading) {
   const nNode = normalFromMaps();
   mat.normalNode = nNode;
 
+  groundReflector.uvNode = groundReflector.uvNode.add(nNode.xz.mul(shading.reflectDistort));
+
   mat.colorNode = Fn(() => {
     const N = nNode;
     const V = normalize(cameraPosition.sub(positionWorld));
     const fresnel = pow(float(1).sub(max(dot(N, V), 0)), 3).saturate();
     const depthTint = smoothstep(float(-3), float(6), positionWorld.y);
 
-    // Subsurface scatter — sun-lit crest glow (poseidon-style)
     const heightFactor = saturate(positionWorld.y.mul(0.4).add(0.3));
     const H = normalize(N.negate().add(shading.sunDir));
     const sss = pow(saturate(dot(V, H.negate())), 4).mul(shading.sssStrength).mul(heightFactor);
@@ -65,15 +82,28 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading) {
       const turb = texture(c.displacement, worldXZ.div(lengthScales[i])).w;
       foamRaw.addAssign(saturate(shading.foamThreshold.sub(turb).mul(shading.foamScale)));
     });
+
+    if (wakeTex) {
+      const wakeUV = fract(worldXZ.div(wakeExtent));
+      foamRaw.addAssign(wakeTex.sample(wakeUV).g.div(255).mul(shading.wakeFoam));
+    }
+
     const coverage = smoothstep(float(0.2), float(0.9), foamRaw);
     const foam = shading.foamColor.mul(float(0.55).add(saturate(dot(N, shading.sunDir)).mul(0.55)));
 
     let surface = mix(body.add(spec), foam, coverage);
 
-    // Darker underside when viewed from below the surface
     const below = smoothstep(float(0.15), float(0.85), shading.underwaterMix)
       .mul(smoothstep(positionWorld.y, float(0), cameraPosition.y));
     surface = mix(surface, shading.deepColor.mul(0.35), below.mul(0.75));
+
+    const refOffset = N.xz.mul(shading.refractionDistort);
+    const refracted = viewportSharedTexture(viewportSafeUV(screenUV.add(refOffset)));
+    const reflectance = fresnel.mul(shading.reflectionStrength).saturate();
+    const refractAmt = float(1).sub(reflectance).mul(shading.refractionStrength).saturate();
+    const aboveWater = float(1).sub(below);
+    surface = mix(surface, refracted.rgb, refractAmt.mul(aboveWater));
+    surface = mix(surface, groundReflector.rgb, reflectance.mul(aboveWater));
 
     return surface;
   })();
@@ -81,7 +111,7 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading) {
   mat.roughnessNode = shading.roughness;
   mat.metalnessNode = shading.metalness;
 
-  return { material: mat, detailTex };
+  return { material: mat, detailTex, reflector: groundReflector };
 }
 
 export function createShadingUniforms(preset) {
@@ -100,6 +130,12 @@ export function createShadingUniforms(preset) {
     metalness: uniform(preset.metalness ?? 0.14),
     detail: uniform(0.08),
     sunDir: uniform(new THREE.Vector3(0, 1, 0)),
+    refractionStrength: uniform(preset.refractionStrength ?? 0.72),
+    reflectionStrength: uniform(preset.reflectionStrength ?? 0.55),
+    refractionDistort: uniform(preset.refractionDistort ?? 0.038),
+    reflectDistort: uniform(preset.reflectDistort ?? 0.018),
+    wakeHeight: uniform(preset.wakeHeight ?? 0.85),
+    wakeFoam: uniform(preset.wakeFoam ?? 0.9),
   };
 }
 
@@ -114,4 +150,6 @@ export function applyShadingUniforms(shading, preset, state) {
   shading.sssStrength.value = state.sssStrength ?? preset.sssStrength ?? 0.85;
   shading.roughness.value = state.roughness ?? preset.roughness;
   shading.metalness.value = preset.metalness ?? 0.14;
+  shading.refractionStrength.value = state.refractionStrength ?? preset.refractionStrength ?? 0.72;
+  shading.reflectionStrength.value = state.reflectionStrength ?? preset.reflectionStrength ?? 0.55;
 }
