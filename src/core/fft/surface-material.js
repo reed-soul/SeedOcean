@@ -1,9 +1,9 @@
-// FFT ocean surface — multi-cascade displacement + Jacobian foam + PBR water tint.
+// FFT ocean surface — world-space sampling, SSS, Jacobian foam.
 // Shading adapted from poseidon (MIT) / gasgiant FFT-Ocean (MIT).
 
 import * as THREE from 'three/webgpu';
 import {
-  Fn, positionLocal, positionWorld, cameraPosition, vec2, vec3, vec4, float,
+  Fn, positionWorld, cameraPosition, vec2, vec3, vec4, float,
   texture, normalize, dot, max, pow, mix, saturate, smoothstep, uniform, time,
 } from 'three/tsl';
 import { makeDetailTexture } from './detail-texture.js';
@@ -16,7 +16,7 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading) {
   });
 
   const detailTex = makeDetailTexture();
-  const worldXZ = positionLocal.xz;
+  const worldXZ = positionLocal.xz.add(shading.clipOrigin);
 
   mat.positionNode = Fn(() => {
     const disp = vec3(0).toVar();
@@ -48,9 +48,15 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading) {
     const N = nNode;
     const V = normalize(cameraPosition.sub(positionWorld));
     const fresnel = pow(float(1).sub(max(dot(N, V), 0)), 3).saturate();
-    const depthTint = smoothstep(float(-3), float(5), positionWorld.y);
+    const depthTint = smoothstep(float(-3), float(6), positionWorld.y);
 
-    const body = mix(shading.deepColor, shading.waterColor, depthTint);
+    // Subsurface scatter — sun-lit crest glow (poseidon-style)
+    const heightFactor = saturate(positionWorld.y.mul(0.4).add(0.3));
+    const H = normalize(N.negate().add(shading.sunDir));
+    const sss = pow(saturate(dot(V, H.negate())), 4).mul(shading.sssStrength).mul(heightFactor);
+
+    const shallow = mix(shading.waterColor, shading.scatterColor, sss);
+    const body = mix(shading.deepColor, shallow, depthTint);
     const spec = shading.foamColor.mul(fresnel.mul(shading.foamStrength));
 
     const foamRaw = float(0).toVar();
@@ -60,7 +66,7 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading) {
       foamRaw.addAssign(saturate(shading.foamThreshold.sub(turb).mul(shading.foamScale)));
     });
     const coverage = smoothstep(float(0.2), float(0.9), foamRaw);
-    const foam = shading.foamColor.mul(float(0.6).add(saturate(dot(N, shading.sunDir)).mul(0.5)));
+    const foam = shading.foamColor.mul(float(0.55).add(saturate(dot(N, shading.sunDir)).mul(0.55)));
 
     return mix(body.add(spec), foam, coverage);
   })();
@@ -73,12 +79,15 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading) {
 
 export function createShadingUniforms(preset) {
   return {
+    clipOrigin: uniform(new THREE.Vector2()),
     waterColor: uniform(new THREE.Color(preset.waterColor ?? 0x0a5f7a)),
     deepColor: uniform(new THREE.Color(preset.deepColor ?? 0x021a2b)),
+    scatterColor: uniform(new THREE.Color(preset.scatterColor ?? 0x2e8f8f)),
     foamColor: uniform(new THREE.Color(preset.foamColor ?? 0xd0ecff)),
     foamStrength: uniform(preset.foamStrength ?? 0.32),
     foamThreshold: uniform(preset.foamThreshold ?? 0.42),
     foamScale: uniform(preset.foamScale ?? 2.2),
+    sssStrength: uniform(preset.sssStrength ?? 0.85),
     roughness: uniform(preset.roughness ?? 0.09),
     metalness: uniform(preset.metalness ?? 0.14),
     detail: uniform(0.08),
@@ -89,10 +98,12 @@ export function createShadingUniforms(preset) {
 export function applyShadingUniforms(shading, preset, state) {
   shading.waterColor.value.set(state.waterColor ?? preset.waterColor);
   shading.deepColor.value.set(state.deepColor ?? preset.deepColor);
+  shading.scatterColor.value.set(preset.scatterColor ?? 0x2e8f8f);
   shading.foamColor.value.set(preset.foamColor);
   shading.foamStrength.value = state.foamStrength ?? preset.foamStrength;
   shading.foamThreshold.value = preset.foamThreshold ?? 0.42;
   shading.foamScale.value = preset.foamScale ?? 2.2;
+  shading.sssStrength.value = state.sssStrength ?? preset.sssStrength ?? 0.85;
   shading.roughness.value = state.roughness ?? preset.roughness;
   shading.metalness.value = preset.metalness ?? 0.14;
 }

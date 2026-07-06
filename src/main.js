@@ -46,16 +46,16 @@ async function init() {
   app.appendChild(renderer.domElement);
 
   scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x4a90b8, 0.0012);
+  scene.fog = new THREE.FogExp2(0x4a90b8, 0.00085);
 
-  camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 4000);
+  camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 6000);
   camera.position.set(0, 14, 48);
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.maxPolarAngle = Math.PI * 0.49;
-  controls.minDistance = 8;
-  controls.maxDistance = 280;
+  controls.minDistance = 6;
+  controls.maxDistance = 420;
   controls.target.set(0, 2, 0);
 
   await renderer.init();
@@ -72,7 +72,8 @@ async function init() {
   syncSky();
 
   ocean = await buildFFTOcean(renderer, preset, state);
-  scene.add(ocean.mesh);
+  scene.add(ocean.root);
+  ocean.updateClipmap(camera);
 
   const buoy = new THREE.Mesh(
     new THREE.CylinderGeometry(0.35, 0.5, 1.2, 12),
@@ -129,7 +130,7 @@ function syncSky() {
 async function exportSnapshot() {
   ocean.evolve(clock.getElapsedTime(), clock.getDelta(), state.waveSpeed);
   const slug = preset.id;
-  await exportFFTOceanGLB(renderer, ocean.mesh, ocean.simulator, `seedocean-${slug}.glb`);
+  await exportFFTOceanGLB(renderer, ocean.root, ocean.mesh, ocean.simulator, `seedocean-${slug}.glb`);
 }
 
 function onResize() {
@@ -143,14 +144,15 @@ function animate() {
   const t = clock.getElapsedTime();
   controls.update();
 
+  ocean.updateClipmap(camera);
   ocean.evolve(t, dt, state.waveSpeed);
 
   if (hud) {
     const fft = ocean.simulator;
     hud.textContent = [
-      'SeedOcean v0.2.0-alpha · FFT/JONSWAP',
+      'SeedOcean v0.3.0-alpha · clipmap + FFT',
       `${preset.name} · seed ${state.seed}`,
-      `grid ${fft.N}² · ${fft.cascades.length} cascades`,
+      `grid ${fft.N}² · ${fft.cascades.length} cascades · ${ocean.clipmap.extent | 0}m`,
       `t ${t.toFixed(1)}s`,
     ].join('\n');
   }

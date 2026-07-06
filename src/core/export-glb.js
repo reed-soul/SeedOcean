@@ -10,7 +10,7 @@ function wrapUV(x, scale) {
 
 /**
  * @param {import('./fft/ocean-simulator.js').OceanSimulator} simulator
- * @param {Float32Array[]} cascadeBuffers — per-cascade { dxdz, dydxz, lengthScale }
+ * @param {{ dxdz: Float32Array, dydxz: Float32Array, lengthScale: number }[]} cascadeBuffers
  */
 export function sampleFFTDisplacement(x, z, simulator, cascadeBuffers) {
   let dx = 0;
@@ -43,14 +43,16 @@ export async function readCascadeBuffers(renderer, simulator) {
   return buffers;
 }
 
-export function bakeFFTGeometry(oceanMesh, simulator, cascadeBuffers) {
+export function bakeFFTGeometry(oceanMesh, simulator, cascadeBuffers, oceanRoot = null) {
   const src = oceanMesh.geometry;
   const baked = src.clone();
   const pos = baked.attributes.position;
   const tmp = new Vector3();
+  if (oceanRoot) oceanRoot.updateWorldMatrix(true, false);
 
   for (let i = 0; i < pos.count; i++) {
     tmp.fromBufferAttribute(pos, i);
+    if (oceanRoot) tmp.applyMatrix4(oceanRoot.matrixWorld);
     const disp = sampleFFTDisplacement(tmp.x, tmp.z, simulator, cascadeBuffers);
     pos.setXYZ(i, tmp.x + disp.x, tmp.y + disp.y, tmp.z + disp.z);
   }
@@ -59,9 +61,9 @@ export function bakeFFTGeometry(oceanMesh, simulator, cascadeBuffers) {
   return baked;
 }
 
-export async function exportFFTOceanGLB(renderer, oceanMesh, simulator, filename = 'seedocean.glb') {
+export async function exportFFTOceanGLB(renderer, oceanRoot, oceanMesh, simulator, filename = 'seedocean.glb') {
   const cascadeBuffers = await readCascadeBuffers(renderer, simulator);
-  const geometry = bakeFFTGeometry(oceanMesh, simulator, cascadeBuffers);
+  const geometry = bakeFFTGeometry(oceanMesh, simulator, cascadeBuffers, oceanRoot);
   const exportMat = new MeshStandardMaterial({ color: 0x0a5f7a, roughness: 0.1, metalness: 0.1 });
   const exportMesh = new Mesh(geometry, exportMat);
   exportMesh.name = 'SeedOcean_Baked';

@@ -8,27 +8,26 @@ Inspired by [SeedThree](https://github.com/SkyeShark/SeedThree) — live preset 
 
 </div>
 
-> **Status: `v0.2.0-alpha`.** WebGPU FFT/JONSWAP ocean with Jacobian foam, multi-cascade displacement, and `.glb` export. Underwater path and clipmap LOD are next.
+> **Status: `v0.3.0-alpha`.** Infinite clipmap ocean, 3-cascade FFT/JONSWAP, subsurface scattering, Jacobian foam, and `.glb` export. Underwater rendering is next.
 
 ## What's in it
 
-- **FFT / JONSWAP ocean** — GPU butterfly IFFT (Stockham), Horvath directional spectrum, Tessendorf-style displacement
-- **Two cascades** — 128² grid per cascade, summed for wide wavelength coverage
-- **Three presets** — Calm Bay, Coastal Chop, Open Storm (wind, seed, colors, sky)
-- **Jacobian foam** — crest-breaking detection with persistent turbulence
-- **Living sky** — `SkyMesh` atmosphere with sun + cloud controls
-- **glTF export** — GPU buffer readback → baked wave surface `.glb`
-
-Spectrum / FFT code adapted from [poseidon](https://github.com/owenyuwono/poseidon) and [gasgiant/FFT-Ocean](https://github.com/gasgiant/FFT-Ocean) (MIT).
+- **FFT / JONSWAP ocean** — GPU butterfly IFFT, Horvath directional spectrum (MIT, poseidon / FFT-Ocean)
+- **3 cascades** — 128² grid each, length scales 200 m / 20 m / 3.5 m
+- **Infinite clipmap** — 4 nested rings, camera-snapped, ~1.5 km extent
+- **Subsurface scattering** — sun-lit crest glow with adjustable strength
+- **Jacobian foam** — persistent turbulence on breaking crests
+- **Three presets** — Calm Bay, Coastal Chop, Open Storm
+- **glTF export** — GPU buffer readback → baked wave surface
 
 ## Roadmap
 
 | Phase | Target |
 |-------|--------|
-| **1** ✅ | Scaffold, Gerstner ocean, presets, export |
-| **2** ✅ | WebGPU FFT/IFFT (JONSWAP spectrum) *(this release)* |
-| **3** | Infinite clipmap, subsurface scattering, 3rd cascade |
-| **4** | Underwater rendering, caustics, buoyancy sampling |
+| **1** ✅ | Scaffold, Gerstner, presets, export |
+| **2** ✅ | WebGPU FFT/IFFT (JONSWAP) |
+| **3** ✅ | Clipmap, SSS, 3rd cascade *(this release)* |
+| **4** | Underwater rendering, caustics, buoyancy |
 
 ## Requirements
 
@@ -41,7 +40,7 @@ npm install
 npm run dev      # http://localhost:5391
 ```
 
-Drag to orbit. Use the panel to switch presets, reseed, tune wind and colors, export.
+Drag to orbit — the ocean follows the camera. Tune wind, SSS, foam, and export a `.glb`.
 
 ```bash
 npm run build
@@ -51,20 +50,17 @@ npm run preview
 ## Layout
 
 ```
-src/
-  core/
-    fft/           spectrum, butterfly IFFT, cascades, maps
-    fft-ocean.js   simulator + mesh integration
-    environment.js sky / sun
-    export-glb.js  FFT-aware glb baking
-  presets/         calm · coastal · storm
-  ui/              lil-gui panel
+src/core/
+  fft/           spectrum · IFFT · cascades · maps
+  clipmap.js     nested-ring geometry + camera snap
+  fft-ocean.js   integration
+  export-glb.js  FFT-aware export
 ```
 
 ## Reference
 
 - Product pattern: [SkyeShark/SeedThree](https://github.com/SkyeShark/SeedThree)
-- FFT ocean: Tessendorf 2001, Horvath 2015 JONSWAP spectrum
+- FFT ocean: Tessendorf 2001, Horvath 2015, [poseidon](https://github.com/owenyuwono/poseidon) (MIT)
 
 ## License
 

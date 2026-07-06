@@ -2,8 +2,8 @@
 
 export const FFT_DEFAULTS = {
   N: 128,
-  cascades: 2,
-  lengthScales: [100, 12],
+  cascades: 3,
+  lengthScales: [200, 20, 3.5],
   boundaryFactor: 6,
   g: 9.81,
   depth: 500,

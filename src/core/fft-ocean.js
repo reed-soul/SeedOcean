@@ -1,15 +1,12 @@
-// FFT ocean integration — simulator + render mesh.
+// FFT ocean integration — simulator + clipmap render mesh.
 
-import * as THREE from 'three/webgpu';
 import { OceanSimulator } from './fft/ocean-simulator.js';
 import { createFFTSurfaceMaterial, createShadingUniforms, applyShadingUniforms } from './fft/surface-material.js';
 import { buildSpectrumParams } from './fft/defaults.js';
-
-const MESH_SIZE = 600;
-const MESH_SEGMENTS = 256;
+import { buildClipmapMesh } from './clipmap.js';
 
 /**
- * @param {THREE.WebGPURenderer} renderer
+ * @param {import('three/webgpu').WebGPURenderer} renderer
  * @param {object} preset
  * @param {object} state — live UI state
  */
@@ -27,12 +24,11 @@ export async function buildFFTOcean(renderer, preset, state) {
     shading,
   );
 
-  const geometry = new THREE.PlaneGeometry(MESH_SIZE, MESH_SIZE, MESH_SEGMENTS, MESH_SEGMENTS);
-  geometry.rotateX(-Math.PI / 2);
-
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.name = 'SeedOcean_FFT';
-  mesh.frustumCulled = false;
+  const clipmap = buildClipmapMesh(material, {
+    patchHalf: 56,
+    levels: 4,
+    cells: 32,
+  });
 
   function applyPreset(nextPreset, nextState) {
     const params = buildSpectrumParams(nextPreset, nextState);
@@ -56,8 +52,15 @@ export async function buildFFTOcean(renderer, preset, state) {
     simulator.evolve(t * timeScale, dt);
   }
 
+  function updateClipmap(camera) {
+    clipmap.update(camera);
+    shading.clipOrigin.value.set(clipmap.root.position.x, clipmap.root.position.z);
+  }
+
   return {
-    mesh,
+    root: clipmap.root,
+    mesh: clipmap.mesh,
+    clipmap,
     simulator,
     shading,
     spectrumParams,
@@ -65,5 +68,6 @@ export async function buildFFTOcean(renderer, preset, state) {
     applyLiveTuning,
     setSunDirection,
     evolve,
+    updateClipmap,
   };
 }

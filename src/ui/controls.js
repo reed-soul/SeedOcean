@@ -23,6 +23,7 @@ export function buildGUI(ctx) {
   const color = gui.addFolder('Water');
   color.addColor(state, 'waterColor').name('Shallow').onChange(() => ctx.onLive());
   color.addColor(state, 'deepColor').name('Deep').onChange(() => ctx.onLive());
+  color.add(state, 'sssStrength', 0, 2, 0.01).name('SSS').onChange(() => ctx.onLive());
   color.add(state, 'foamStrength', 0, 1, 0.01).name('Foam').onChange(() => ctx.onLive());
   color.add(state, 'roughness', 0, 1, 0.01).name('Roughness').onChange(() => ctx.onLive());
 
@@ -46,6 +47,7 @@ export function stateFromPreset(preset) {
     windDirection: preset.windDirection ?? preset.sky?.azimuth ?? 45,
     waterColor: preset.waterColor,
     deepColor: preset.deepColor,
+    sssStrength: preset.sssStrength ?? 0.85,
     foamStrength: preset.foamStrength,
     roughness: preset.roughness,
     elevation: preset.sky.elevation,
