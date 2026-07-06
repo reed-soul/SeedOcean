@@ -38,6 +38,7 @@ export function buildGUI(ctx) {
   sky.add(state, 'azimuth', 0, 360, 1).name('Sun bearing').onChange(() => ctx.onSky());
   sky.add(state, 'exposure', 0.05, 1.2, 0.01).name('Exposure').onChange(() => ctx.onSky());
   sky.add(state, 'cloudCoverage', 0, 1, 0.01).name('Clouds').onChange(() => ctx.onSky());
+  sky.add(state, 'starsDensity', 0, 1, 0.01).name('Stars').onChange(() => ctx.onSky());
 
   gui.add({ export: ctx.onExport }, 'export').name('Export .glb');
 
@@ -63,6 +64,7 @@ export function stateFromPreset(preset) {
     elevation: preset.sky.elevation,
     azimuth: preset.sky.azimuth,
     exposure: preset.sky.exposure,
+    starsDensity: preset.sky.starsDensity ?? 1,
     cloudCoverage: preset.sky.cloudCoverage,
   };
 }

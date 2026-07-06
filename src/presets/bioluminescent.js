@@ -27,8 +27,8 @@ export const bioluminescent = {
   causticStrength: 0.6,
   seafloorDepth: -24,
   // Near-dark sky so the crest glow dominates the read. High SSS + bright
-  // scatterColor makes every crest edge emit electric blue-green.
-  sky: { elevation: 0.6, azimuth: 150, exposure: 0.045, turbidity: 2, cloudCoverage: 0.4 },
+  // scatterColor makes every crest edge emit electric blue-green. Stars on.
+  sky: { elevation: 0.6, azimuth: 150, exposure: 0.08, turbidity: 2, cloudCoverage: 0.35, starsDensity: 0.9 },
   spectrum: {
     lambda: 0.95,
     local: { windSpeed: 4, scale: 0.52, swell: 0.16 },

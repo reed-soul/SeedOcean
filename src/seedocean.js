@@ -114,6 +114,7 @@ export class SeedOcean {
       this.scene.add(this.env.sky);
       this.scene.add(this.env.sunLight);
       this.scene.add(this.env.hemi);
+      if (this.env.stars) this.scene.add(this.env.stars);
     }
 
     if (this.isWebGPU) {
@@ -263,6 +264,7 @@ export class SeedOcean {
       azimuth: this.state.azimuth,
       exposure: this.state.exposure,
       cloudCoverage: this.state.cloudCoverage,
+      starsDensity: this.state.starsDensity ?? 1,
     });
     this.env.sky.cloudCoverage.value = this.state.cloudCoverage;
     this.sunDir = this.env.updateSun(this.scene);
@@ -296,6 +298,8 @@ export class SeedOcean {
     const t = this.clock.getElapsedTime();
 
     this.ocean.updateClipmap(this.camera);
+    // Star shell follows the camera so it always reads as infinitely far.
+    if (this.env?.stars) this.env.stars.position.copy(this.camera.position);
     if (this.seafloor) {
       this.seafloor.mesh.position.x = this.ocean.root.position.x;
       this.seafloor.mesh.position.z = this.ocean.root.position.z;

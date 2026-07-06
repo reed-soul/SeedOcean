@@ -27,8 +27,8 @@ export const moonlit = {
   causticStrength: 0.18,
   seafloorDepth: -26,
   // SkyMesh goes black at elevation <= 0; 0.5° keeps a faint horizon glow.
-  // Exposure is pushed very low to read as night; azimuth places the "moon".
-  sky: { elevation: 0.5, azimuth: 200, exposure: 0.08, turbidity: 2, cloudCoverage: 0.22 },
+  // Exposure relaxed — the star field + cool moonlight carry the night read.
+  sky: { elevation: 0.5, azimuth: 200, exposure: 0.14, turbidity: 2, cloudCoverage: 0.18, starsDensity: 1 },
   spectrum: {
     lambda: 0.85,
     local: { windSpeed: 3.5, scale: 0.45, swell: 0.12 },
