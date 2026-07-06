@@ -1,0 +1,21 @@
+export const storm = {
+  id: 'storm',
+  name: 'Open Storm',
+  description: 'Heavy swell, brooding sky, crest foam.',
+  seed: 99,
+  waveAmp: 1.45,
+  waveSpeed: 1.35,
+  waterColor: 0x073d55,
+  deepColor: 0x010f1a,
+  foamColor: 0xb8d9f0,
+  foamStrength: 0.48,
+  roughness: 0.14,
+  metalness: 0.08,
+  sky: { elevation: 8, azimuth: 210, exposure: 0.22, turbidity: 14, cloudCoverage: 0.72 },
+  waves: [
+    { amplitude: 1.1, wavelength: 38, direction: [0.95, 0.1], steepness: 0.55, speed: 1.2 },
+    { amplitude: 0.65, wavelength: 18, direction: [0.4, 0.85], steepness: 0.5, speed: 1.25 },
+    { amplitude: 0.38, wavelength: 9, direction: [-0.5, 0.7], steepness: 0.45, speed: 1.35 },
+    { amplitude: 0.2, wavelength: 4.2, direction: [0.6, -0.6], steepness: 0.4, speed: 1.45 },
+  ],
+};

@@ -1,0 +1,53 @@
+/* SeedOcean UI — ocean-blue lil-gui skin (SeedThree-inspired layout). */
+
+:root {
+  --so-text: #e6f2fb;
+  --so-dim: #8eb4d4;
+  --so-accent: #2a9fd6;
+  --so-deep: #0d4f7a;
+  --so-radius: 14px;
+}
+
+.lil-gui {
+  --background-color: transparent;
+  --title-background-color: transparent;
+  --widget-color: rgba(255, 255, 255, 0.07);
+  --hover-color: rgba(255, 255, 255, 0.12);
+  --focus-color: rgba(42, 159, 214, 0.35);
+  --number-color: #7ec8ff;
+  --string-color: #5ecfff;
+  --font-family: 'Segoe UI', system-ui, sans-serif;
+  --font-size: 12px;
+  --text-color: var(--so-text);
+  --title-text-color: var(--so-text);
+}
+
+.lil-gui.lil-root {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  margin: 0;
+  border-radius: var(--so-radius);
+  background: #071422;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden auto;
+  max-height: calc(100vh - 24px);
+  border: 1px solid rgba(42, 159, 214, 0.35);
+}
+
+.lil-gui .lil-title {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.lil-gui .lil-controller .lil-name {
+  color: var(--so-dim);
+}
+
+.lil-gui .lil-controller .lil-widget {
+  border-radius: 6px;
+}
+
+.lil-gui .lil-controller .lil-slider {
+  background: linear-gradient(90deg, var(--so-deep), var(--so-accent));
+}

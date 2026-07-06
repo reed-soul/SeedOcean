@@ -1,0 +1,21 @@
+export const calm = {
+  id: 'calm',
+  name: 'Calm Bay',
+  description: 'Gentle swell, glassy reflections.',
+  seed: 42,
+  waveAmp: 0.85,
+  waveSpeed: 0.65,
+  waterColor: 0x0d6e8a,
+  deepColor: 0x032638,
+  foamColor: 0xe8f7ff,
+  foamStrength: 0.22,
+  roughness: 0.06,
+  metalness: 0.12,
+  sky: { elevation: 22, azimuth: 170, exposure: 0.32, turbidity: 6, cloudCoverage: 0.2 },
+  waves: [
+    { amplitude: 0.35, wavelength: 28, direction: [1, 0.2], steepness: 0.25, speed: 0.8 },
+    { amplitude: 0.18, wavelength: 14, direction: [0.6, 0.9], steepness: 0.2, speed: 0.9 },
+    { amplitude: 0.1, wavelength: 7, direction: [-0.4, 1], steepness: 0.15, speed: 1.1 },
+    { amplitude: 0.06, wavelength: 3.5, direction: [0.9, -0.3], steepness: 0.12, speed: 1.2 },
+  ],
+};

@@ -1,0 +1,21 @@
+export const coastal = {
+  id: 'coastal',
+  name: 'Coastal Chop',
+  description: 'Moderate wind, lively surface detail.',
+  seed: 7,
+  waveAmp: 1.0,
+  waveSpeed: 1.0,
+  waterColor: 0x0a5f7a,
+  deepColor: 0x021f33,
+  foamColor: 0xd0ecff,
+  foamStrength: 0.32,
+  roughness: 0.09,
+  metalness: 0.14,
+  sky: { elevation: 16, azimuth: 155, exposure: 0.28, turbidity: 9, cloudCoverage: 0.4 },
+  waves: [
+    { amplitude: 0.55, wavelength: 22, direction: [1, 0.15], steepness: 0.38, speed: 1.0 },
+    { amplitude: 0.32, wavelength: 11, direction: [0.3, 1], steepness: 0.35, speed: 1.05 },
+    { amplitude: 0.18, wavelength: 5.5, direction: [-0.7, 0.6], steepness: 0.3, speed: 1.15 },
+    { amplitude: 0.09, wavelength: 2.8, direction: [0.8, -0.5], steepness: 0.25, speed: 1.25 },
+  ],
+};
