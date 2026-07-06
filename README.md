@@ -41,7 +41,6 @@ Orbit below the surface for underwater mode. A boat leaves a wake; the red buoy 
 
 ![Animated demo — coastal → storm sweep](docs/assets/demo.gif)
 
-</div>
 ## Install
 
 ```bash
