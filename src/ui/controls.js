@@ -27,6 +27,9 @@ export function buildGUI(ctx) {
   color.add(state, 'foamStrength', 0, 1, 0.01).name('Foam').onChange(() => ctx.onLive());
   color.add(state, 'roughness', 0, 1, 0.01).name('Roughness').onChange(() => ctx.onLive());
 
+  const under = gui.addFolder('Underwater');
+  under.add(state, 'godRayStrength', 0, 0.6, 0.01).name('God rays').onChange(() => ctx.onLive());
+
   const sky = gui.addFolder('Sky');
   sky.add(state, 'elevation', 0, 60, 0.5).name('Sun height').onChange(() => ctx.onSky());
   sky.add(state, 'azimuth', 0, 360, 1).name('Sun bearing').onChange(() => ctx.onSky());
@@ -50,6 +53,7 @@ export function stateFromPreset(preset) {
     sssStrength: preset.sssStrength ?? 0.85,
     foamStrength: preset.foamStrength,
     roughness: preset.roughness,
+    godRayStrength: preset.godRayStrength ?? 0.22,
     elevation: preset.sky.elevation,
     azimuth: preset.sky.azimuth,
     exposure: preset.sky.exposure,

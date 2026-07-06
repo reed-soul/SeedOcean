@@ -68,7 +68,14 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading) {
     const coverage = smoothstep(float(0.2), float(0.9), foamRaw);
     const foam = shading.foamColor.mul(float(0.55).add(saturate(dot(N, shading.sunDir)).mul(0.55)));
 
-    return mix(body.add(spec), foam, coverage);
+    let surface = mix(body.add(spec), foam, coverage);
+
+    // Darker underside when viewed from below the surface
+    const below = smoothstep(float(0.15), float(0.85), shading.underwaterMix)
+      .mul(smoothstep(positionWorld.y, float(0), cameraPosition.y));
+    surface = mix(surface, shading.deepColor.mul(0.35), below.mul(0.75));
+
+    return surface;
   })();
 
   mat.roughnessNode = shading.roughness;
@@ -80,6 +87,7 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading) {
 export function createShadingUniforms(preset) {
   return {
     clipOrigin: uniform(new THREE.Vector2()),
+    underwaterMix: uniform(0),
     waterColor: uniform(new THREE.Color(preset.waterColor ?? 0x0a5f7a)),
     deepColor: uniform(new THREE.Color(preset.deepColor ?? 0x021a2b)),
     scatterColor: uniform(new THREE.Color(preset.scatterColor ?? 0x2e8f8f)),

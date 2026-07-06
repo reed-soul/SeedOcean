@@ -16,6 +16,12 @@ export const coastal = {
   foamScale: 2.2,
   roughness: 0.09,
   metalness: 0.14,
+  underwaterColor: 0x043a55,
+  godRayStrength: 0.22,
+  seafloorColor: 0x0a1a22,
+  causticColor: 0x3a8a9a,
+  causticStrength: 0.55,
+  seafloorDepth: -28,
   sky: { elevation: 16, azimuth: 155, exposure: 0.28, turbidity: 9, cloudCoverage: 0.4 },
   spectrum: {
     lambda: 1.25,

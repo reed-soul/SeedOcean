@@ -6,6 +6,9 @@ import { buildFFTOcean } from './core/fft-ocean.js';
 import { validateFFT } from './core/fft/fft.js';
 import { buildEnvironment } from './core/environment.js';
 import { exportFFTOceanGLB } from './core/export-glb.js';
+import { BuoyancySampler } from './core/buoyancy.js';
+import { buildSeafloor } from './core/seafloor.js';
+import { createUnderwaterPipeline } from './core/underwater-post.js';
 import { PRESETS, DEFAULT_PRESET } from './presets/index.js';
 import { buildGUI, stateFromPreset } from './ui/controls.js';
 import './ui/theme.css';
@@ -30,9 +33,17 @@ let camera;
 let controls;
 let ocean;
 let env;
+let seafloor;
+let underwater;
+let buoyancy;
+let buoy;
 let state;
 let clock;
 let preset;
+let sunDir = new THREE.Vector3();
+
+const ABOVE_FOG = { color: 0x4a90b8, density: 0.00085 };
+const BELOW_FOG = { color: 0x032838, density: 0.0032 };
 
 async function init() {
   preset = PRESETS[DEFAULT_PRESET];
@@ -46,15 +57,15 @@ async function init() {
   app.appendChild(renderer.domElement);
 
   scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x4a90b8, 0.00085);
+  scene.fog = new THREE.FogExp2(ABOVE_FOG.color, ABOVE_FOG.density);
 
   camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 6000);
   camera.position.set(0, 14, 48);
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  controls.maxPolarAngle = Math.PI * 0.49;
-  controls.minDistance = 6;
+  controls.maxPolarAngle = Math.PI * 0.95;
+  controls.minDistance = 4;
   controls.maxDistance = 420;
   controls.target.set(0, 2, 0);
 
@@ -75,13 +86,24 @@ async function init() {
   scene.add(ocean.root);
   ocean.updateClipmap(camera);
 
-  const buoy = new THREE.Mesh(
+  buoyancy = new BuoyancySampler(ocean.simulator, 3);
+
+  seafloor = buildSeafloor(preset, ocean.shading.sunDir);
+  scene.add(seafloor.mesh);
+
+  buoy = new THREE.Mesh(
     new THREE.CylinderGeometry(0.35, 0.5, 1.2, 12),
     new THREE.MeshStandardNodeMaterial({ color: 0xff5533, roughness: 0.55 }),
   );
   buoy.position.set(6, 0.6, -4);
   buoy.name = 'Buoy';
   scene.add(buoy);
+
+  underwater = createUnderwaterPipeline(renderer, scene, camera);
+  underwater.setPreset(preset);
+
+  ocean.evolve(0, 1 / 60, state.waveSpeed);
+  await buoyancy.requestReadback(renderer);
 
   buildGUI({
     state,
@@ -101,6 +123,7 @@ async function switchPreset(id) {
   preset = PRESETS[id];
   Object.assign(state, stateFromPreset(preset));
   await ocean.applyPreset(preset, state);
+  underwater.setPreset(preset);
   applyLiveTuning();
   syncSky();
 }
@@ -111,6 +134,7 @@ async function rebuildOcean() {
 
 function applyLiveTuning() {
   ocean.applyLiveTuning(preset, state);
+  underwater.uniforms.godRayStrength.value = state.godRayStrength ?? preset.godRayStrength ?? 0.22;
   renderer.toneMappingExposure = state.exposure;
 }
 
@@ -122,9 +146,16 @@ function syncSky() {
     cloudCoverage: state.cloudCoverage,
   });
   env.sky.cloudCoverage.value = state.cloudCoverage;
-  const sunDir = env.updateSun(scene);
+  sunDir = env.updateSun(scene);
   ocean.setSunDirection(sunDir);
+  underwater.uniforms.sunDir.value.copy(sunDir);
   renderer.toneMappingExposure = state.exposure;
+}
+
+function applyFogBlend(mix) {
+  const fog = scene.fog;
+  fog.color.setHex(mix > 0.5 ? BELOW_FOG.color : ABOVE_FOG.color);
+  fog.density = THREE.MathUtils.lerp(ABOVE_FOG.density, BELOW_FOG.density, mix);
 }
 
 async function exportSnapshot() {
@@ -145,19 +176,37 @@ function animate() {
   controls.update();
 
   ocean.updateClipmap(camera);
+  seafloor.mesh.position.x = ocean.root.position.x;
+  seafloor.mesh.position.z = ocean.root.position.z;
+
   ocean.evolve(t, dt, state.waveSpeed);
+  buoyancy.requestReadback(renderer);
+
+  const uMix = buoyancy.underwaterMix(
+    camera.position.y,
+    camera.position.x,
+    camera.position.z,
+  );
+  underwater.uniforms.underwaterMix.value = uMix;
+  ocean.setUnderwaterMix(uMix);
+  seafloor.updateUnderwater(uMix);
+  applyFogBlend(uMix);
+
+  const buoyY = buoyancy.getHeight(buoy.position.x, buoy.position.z);
+  buoy.position.y = buoyY + 0.75;
 
   if (hud) {
     const fft = ocean.simulator;
+    const mode = uMix > 0.45 ? 'UNDERWATER' : 'surface';
     hud.textContent = [
-      'SeedOcean v0.3.0-alpha · clipmap + FFT',
+      `SeedOcean v0.4.0-alpha · ${mode}`,
       `${preset.name} · seed ${state.seed}`,
-      `grid ${fft.N}² · ${fft.cascades.length} cascades · ${ocean.clipmap.extent | 0}m`,
+      `grid ${fft.N}² · ${fft.cascades.length} cascades · buoy y ${buoyY.toFixed(2)}m`,
       `t ${t.toFixed(1)}s`,
     ].join('\n');
   }
 
-  renderer.render(scene, camera);
+  underwater.render();
 }
 
 init().catch((e) => fail(e?.message ?? String(e)));

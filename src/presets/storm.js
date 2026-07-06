@@ -16,6 +16,12 @@ export const storm = {
   foamScale: 2.8,
   roughness: 0.14,
   metalness: 0.08,
+  underwaterColor: 0x021828,
+  godRayStrength: 0.28,
+  seafloorColor: 0x060e14,
+  causticColor: 0x2a6a7a,
+  causticStrength: 0.4,
+  seafloorDepth: -32,
   sky: { elevation: 8, azimuth: 210, exposure: 0.22, turbidity: 14, cloudCoverage: 0.72 },
   spectrum: {
     lambda: 1.55,

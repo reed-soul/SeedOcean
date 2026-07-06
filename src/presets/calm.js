@@ -16,6 +16,12 @@ export const calm = {
   foamScale: 1.8,
   roughness: 0.06,
   metalness: 0.12,
+  underwaterColor: 0x053040,
+  godRayStrength: 0.15,
+  seafloorColor: 0x081820,
+  causticColor: 0x2a7a88,
+  causticStrength: 0.45,
+  seafloorDepth: -24,
   sky: { elevation: 22, azimuth: 170, exposure: 0.32, turbidity: 6, cloudCoverage: 0.2 },
   spectrum: {
     lambda: 1.0,

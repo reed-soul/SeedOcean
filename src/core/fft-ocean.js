@@ -57,6 +57,10 @@ export async function buildFFTOcean(renderer, preset, state) {
     shading.clipOrigin.value.set(clipmap.root.position.x, clipmap.root.position.z);
   }
 
+  function setUnderwaterMix(mix) {
+    shading.underwaterMix.value = mix;
+  }
+
   return {
     root: clipmap.root,
     mesh: clipmap.mesh,
@@ -67,6 +71,7 @@ export async function buildFFTOcean(renderer, preset, state) {
     applyPreset,
     applyLiveTuning,
     setSunDirection,
+    setUnderwaterMix,
     evolve,
     updateClipmap,
   };

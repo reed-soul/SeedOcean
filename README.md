@@ -8,26 +8,27 @@ Inspired by [SeedThree](https://github.com/SkyeShark/SeedThree) — live preset 
 
 </div>
 
-> **Status: `v0.3.0-alpha`.** Infinite clipmap ocean, 3-cascade FFT/JONSWAP, subsurface scattering, Jacobian foam, and `.glb` export. Underwater rendering is next.
+> **Status: `v0.4.0-alpha`.** Full surface pipeline plus underwater rendering, caustics, buoyancy sampling, and glTF export.
 
 ## What's in it
 
-- **FFT / JONSWAP ocean** — GPU butterfly IFFT, Horvath directional spectrum (MIT, poseidon / FFT-Ocean)
-- **3 cascades** — 128² grid each, length scales 200 m / 20 m / 3.5 m
-- **Infinite clipmap** — 4 nested rings, camera-snapped, ~1.5 km extent
-- **Subsurface scattering** — sun-lit crest glow with adjustable strength
-- **Jacobian foam** — persistent turbulence on breaking crests
-- **Three presets** — Calm Bay, Coastal Chop, Open Storm
-- **glTF export** — GPU buffer readback → baked wave surface
+- **FFT / JONSWAP ocean** — GPU butterfly IFFT, 3 cascades (200 m / 20 m / 3.5 m)
+- **Infinite clipmap** — camera-snapped nested rings (~1.5 km)
+- **Subsurface scattering** — sun-lit crest glow
+- **Jacobian foam** — breaking crest detection
+- **Underwater rendering** — depth tint, Snell's window, god rays (post-process)
+- **Sea floor caustics** — procedural animated light patterns
+- **Buoyancy sampling** — GPU readback drives floating buoy + camera depth
+- **Three presets** + **glTF export**
 
 ## Roadmap
 
 | Phase | Target |
 |-------|--------|
-| **1** ✅ | Scaffold, Gerstner, presets, export |
-| **2** ✅ | WebGPU FFT/IFFT (JONSWAP) |
-| **3** ✅ | Clipmap, SSS, 3rd cascade *(this release)* |
-| **4** | Underwater rendering, caustics, buoyancy |
+| 1 ✅ | Scaffold, Gerstner, presets, export |
+| 2 ✅ | WebGPU FFT/IFFT (JONSWAP) |
+| 3 ✅ | Clipmap, SSS, 3rd cascade |
+| 4 ✅ | Underwater, caustics, buoyancy *(this release)* |
 
 ## Requirements
 
@@ -40,7 +41,7 @@ npm install
 npm run dev      # http://localhost:5391
 ```
 
-Drag to orbit — the ocean follows the camera. Tune wind, SSS, foam, and export a `.glb`.
+Orbit below the surface to enter underwater mode. The red buoy floats on the live wave field.
 
 ```bash
 npm run build
@@ -51,16 +52,18 @@ npm run preview
 
 ```
 src/core/
-  fft/           spectrum · IFFT · cascades · maps
-  clipmap.js     nested-ring geometry + camera snap
-  fft-ocean.js   integration
-  export-glb.js  FFT-aware export
+  fft/              spectrum · IFFT · cascades
+  clipmap.js        infinite ocean mesh
+  underwater-post.js  Snell + fog + god rays
+  seafloor.js       caustic sea floor
+  buoyancy.js       height sampling
+  wave-sampler.js   shared CPU/GPU displacement readback
 ```
 
 ## Reference
 
 - Product pattern: [SkyeShark/SeedThree](https://github.com/SkyeShark/SeedThree)
-- FFT ocean: Tessendorf 2001, Horvath 2015, [poseidon](https://github.com/owenyuwono/poseidon) (MIT)
+- FFT ocean: [poseidon](https://github.com/owenyuwono/poseidon) (MIT)
 
 ## License
 
