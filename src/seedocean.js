@@ -1,0 +1,324 @@
+// SeedOcean public API — embed FFT ocean in any Three.js WebGPU scene.
+
+import * as THREE from 'three/webgpu';
+import { uniform } from 'three/tsl';
+import { buildFFTOcean } from './core/fft-ocean.js';
+import { validateFFT } from './core/fft/fft.js';
+import { buildEnvironment } from './core/environment.js';
+import { exportFFTOceanGLB } from './core/export-glb.js';
+import { BuoyancySampler } from './core/buoyancy.js';
+import { BuoyancySystem, BuoyancyBody } from './core/buoyancy-body.js';
+import { buildSeafloor } from './core/seafloor.js';
+import { buildBoat } from './core/boat.js';
+import { createSubmergedMaterial } from './core/submerged-material.js';
+import { createUnderwaterPipeline } from './core/underwater-post.js';
+import { PRESETS, DEFAULT_PRESET } from './presets/index.js';
+import { stateFromPreset } from './ui/controls.js';
+
+const VERSION = '0.5.0-alpha';
+
+const ABOVE_FOG = { color: 0x4a90b8, density: 0.00085 };
+const BELOW_FOG = { color: 0x032838, density: 0.0032 };
+
+/**
+ * @typedef {object} SeedOceanOptions
+ * @property {HTMLElement} [container] — mount canvas here (creates renderer if omitted)
+ * @property {THREE.WebGPURenderer} [renderer]
+ * @property {THREE.Scene} [scene]
+ * @property {THREE.PerspectiveCamera} [camera]
+ * @property {string|object} [preset] — preset id or preset object
+ * @property {object} [state] — live tuning state (merged with preset defaults)
+ * @property {boolean} [environment=true]
+ * @property {boolean} [seafloor=true]
+ * @property {boolean} [underwater=true]
+ * @property {boolean} [buoyancy=true]
+ * @property {boolean} [demoObjects=false] — buoy, boat, crates
+ * @property {boolean} [validateFFT=true]
+ * @property {number} [fftGrid=128]
+ */
+
+export class SeedOcean {
+  /** @param {SeedOceanOptions} options */
+  static async create(options = {}) {
+    const instance = new SeedOcean(options);
+    await instance._init();
+    return instance;
+  }
+
+  /** @param {SeedOceanOptions} options */
+  constructor(options = {}) {
+    this.options = options;
+    this.version = VERSION;
+    this.clock = new THREE.Clock();
+    this.sunDir = new THREE.Vector3();
+    this._ownsRenderer = !options.renderer;
+    this._ownsScene = !options.scene;
+    this._ownsCamera = !options.camera;
+  }
+
+  async _init() {
+    const opts = this.options;
+    const presetInput = opts.preset ?? DEFAULT_PRESET;
+    this.preset = typeof presetInput === 'string' ? PRESETS[presetInput] : presetInput;
+    this.state = { ...stateFromPreset(this.preset), ...(opts.state ?? {}) };
+
+    if (opts.renderer) {
+      this.renderer = opts.renderer;
+    } else {
+      this.renderer = new THREE.WebGPURenderer({ antialias: true });
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      this.renderer.setSize(window.innerWidth, window.innerHeight);
+      if (opts.container) opts.container.appendChild(this.renderer.domElement);
+    }
+
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = this.state.exposure;
+
+    this.scene = opts.scene ?? new THREE.Scene();
+    if (!this.scene.fog) {
+      this.scene.fog = new THREE.FogExp2(ABOVE_FOG.color, ABOVE_FOG.density);
+    }
+
+    if (opts.camera) {
+      this.camera = opts.camera;
+    } else {
+      this.camera = new THREE.PerspectiveCamera(
+        55,
+        this.renderer.domElement.clientWidth / this.renderer.domElement.clientHeight || 1,
+        0.5,
+        6000,
+      );
+      this.camera.position.set(0, 14, 48);
+    }
+
+    await this.renderer.init();
+
+    if (opts.validateFFT !== false) {
+      this.fftTest = await validateFFT(this.renderer, opts.fftGrid ?? 128);
+    }
+
+    if (opts.environment !== false) {
+      this.env = buildEnvironment(this.renderer);
+      this.scene.add(this.env.sky);
+      this.scene.add(this.env.sunLight);
+      this.scene.add(this.env.hemi);
+      this.syncSky();
+    }
+
+    this.ocean = await buildFFTOcean(this.renderer, this.preset, this.state);
+    this.scene.add(this.ocean.root);
+    this.ocean.updateClipmap(this.camera);
+
+    this.submergedMix = uniform(0);
+
+    if (opts.seafloor !== false) {
+      this.seafloor = buildSeafloor(this.preset, this.ocean.shading.sunDir);
+      this.scene.add(this.seafloor.mesh);
+    }
+
+    if (opts.buoyancy !== false) {
+      this.buoyancy = new BuoyancySampler(this.ocean.simulator, 3);
+      this.buoyancySystem = new BuoyancySystem(this.buoyancy);
+    }
+
+    if (opts.demoObjects) {
+      this._buildDemoObjects();
+    }
+
+    if (opts.underwater !== false) {
+      this.underwater = createUnderwaterPipeline(this.renderer, this.scene, this.camera);
+      this.underwater.setPreset(this.preset);
+    }
+
+    this.ocean.evolve(0, 1 / 60, this.state.waveSpeed);
+    if (this.buoyancy) await this.buoyancy.requestReadback(this.renderer);
+  }
+
+  _buildDemoObjects() {
+    const { preset, scene, ocean, buoyancySystem, submergedMix } = this;
+
+    const buoyMat = createSubmergedMaterial(
+      0xff5533,
+      preset.causticColor ?? 0x3a8a9a,
+      ocean.shading.sunDir,
+      submergedMix,
+      { causticStrength: 0.65 },
+    );
+    this.buoy = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.35, 0.5, 1.2, 12),
+      buoyMat.material,
+    );
+    this.buoy.position.set(6, 0.6, -4);
+    this.buoy.name = 'Buoy';
+    scene.add(this.buoy);
+    buoyancySystem.add(new BuoyancyBody(this.buoy, {
+      buoyancyOffset: 0.75,
+      samples: [[0, 0]],
+      springK: 28,
+      damping: 6,
+    }));
+
+    const boatHullMat = createSubmergedMaterial(
+      0xc8d4dc,
+      preset.causticColor ?? 0x3a8a9a,
+      ocean.shading.sunDir,
+      submergedMix,
+      { causticStrength: 0.48, roughness: 0.45, metalness: 0.12 },
+    );
+    this.boat = buildBoat(boatHullMat.material);
+    scene.add(this.boat);
+    buoyancySystem.add(new BuoyancyBody(this.boat, {
+      buoyancyOffset: 0.35,
+      samples: [[0, 0], [2.2, 0], [-2.2, 0], [0, 0.9], [0, -0.9]],
+      springK: 14,
+      damping: 4.5,
+      maxTilt: 0.22,
+    }));
+
+    this.crates = [];
+    for (const [cx, cz] of [[12, -8], [-10, 14], [18, 6]]) {
+      const crateMat = createSubmergedMaterial(
+        0xc49a6c,
+        preset.causticColor ?? 0x3a8a9a,
+        ocean.shading.sunDir,
+        submergedMix,
+        { causticStrength: 0.5, roughness: 0.75 },
+      );
+      const crate = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 1.4), crateMat.material);
+      crate.position.set(cx, 0.7, cz);
+      crate.name = 'Crate';
+      scene.add(crate);
+      this.crates.push(crate);
+      buoyancySystem.add(new BuoyancyBody(crate, {
+        buoyancyOffset: 0.7,
+        samples: [[0, 0]],
+        springK: 32,
+        damping: 7,
+        maxTilt: 0.12,
+      }));
+    }
+  }
+
+  async applyPreset(idOrPreset, nextState) {
+    this.preset = typeof idOrPreset === 'string' ? PRESETS[idOrPreset] : idOrPreset;
+    if (nextState) Object.assign(this.state, nextState);
+    else Object.assign(this.state, stateFromPreset(this.preset));
+    await this.ocean.applyPreset(this.preset, this.state);
+    this.underwater?.setPreset(this.preset);
+    this.applyLiveTuning();
+    this.syncSky();
+  }
+
+  applyLiveTuning() {
+    this.ocean.applyLiveTuning(this.preset, this.state);
+    if (this.underwater) {
+      this.underwater.uniforms.godRayStrength.value =
+        this.state.godRayStrength ?? this.preset.godRayStrength ?? 0.22;
+    }
+    this.renderer.toneMappingExposure = this.state.exposure;
+  }
+
+  syncSky() {
+    if (!this.env) return;
+    Object.assign(this.env.skyState, {
+      elevation: this.state.elevation,
+      azimuth: this.state.azimuth,
+      exposure: this.state.exposure,
+      cloudCoverage: this.state.cloudCoverage,
+    });
+    this.env.sky.cloudCoverage.value = this.state.cloudCoverage;
+    this.sunDir = this.env.updateSun(this.scene);
+    this.ocean.setSunDirection(this.sunDir);
+    this.underwater?.uniforms.sunDir.value.copy(this.sunDir);
+    this.renderer.toneMappingExposure = this.state.exposure;
+  }
+
+  _applyFogBlend(mix) {
+    const fog = this.scene.fog;
+    if (!fog) return;
+    fog.color.setHex(mix > 0.5 ? BELOW_FOG.color : ABOVE_FOG.color);
+    fog.density = THREE.MathUtils.lerp(ABOVE_FOG.density, BELOW_FOG.density, mix);
+  }
+
+  _stampWake(object, dt, radius = 4, strength = 1.1) {
+    const body = this.buoyancySystem?.getBody(object);
+    if (!body) return;
+    const vel = body.sampleVelocity(dt);
+    const speed = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+    if (speed < 0.15) return;
+    this.ocean.stampWake(object.position.x, object.position.z, vel.x, vel.z, radius, strength);
+  }
+
+  /**
+   * Advance simulation and render one frame.
+   * @param {number} [dt] — delta seconds (uses internal clock if omitted)
+   */
+  update(dt) {
+    const delta = dt ?? this.clock.getDelta();
+    const t = this.clock.getElapsedTime();
+
+    this.ocean.updateClipmap(this.camera);
+    if (this.seafloor) {
+      this.seafloor.mesh.position.x = this.ocean.root.position.x;
+      this.seafloor.mesh.position.z = this.ocean.root.position.z;
+    }
+
+    this.ocean.evolve(t, delta, this.state.waveSpeed);
+    this.buoyancy?.requestReadback(this.renderer);
+
+    let uMix = 0;
+    if (this.buoyancy) {
+      uMix = this.buoyancy.underwaterMix(
+        this.camera.position.y,
+        this.camera.position.x,
+        this.camera.position.z,
+      );
+    }
+
+    if (this.underwater) this.underwater.uniforms.underwaterMix.value = uMix;
+    this.ocean.setUnderwaterMix(uMix);
+    this.seafloor?.updateUnderwater(uMix);
+    this.submergedMix.value = uMix;
+    this._applyFogBlend(uMix);
+
+    this.buoyancySystem?.update(delta);
+    if (this.boat) this._stampWake(this.boat, delta, 5.5, 1.35);
+
+    return { t, dt: delta, underwaterMix: uMix };
+  }
+
+  render() {
+    if (this.underwater) this.underwater.render();
+    else this.renderer.render(this.scene, this.camera);
+  }
+
+  tick() {
+    const frame = this.update();
+    this.render();
+    return frame;
+  }
+
+  resize(width, height) {
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(width, height);
+  }
+
+  async exportGLB(filename) {
+    const t = this.clock.getElapsedTime();
+    this.ocean.evolve(t, 1 / 60, this.state.waveSpeed);
+    const slug = this.preset.id;
+    await exportFFTOceanGLB(
+      this.renderer,
+      this.ocean.root,
+      this.ocean.mesh,
+      this.ocean.simulator,
+      filename ?? `seedocean-${slug}.glb`,
+    );
+  }
+
+  dispose() {
+    this.renderer.setAnimationLoop(null);
+    if (this._ownsRenderer) this.renderer.dispose();
+  }
+}

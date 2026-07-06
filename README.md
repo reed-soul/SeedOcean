@@ -6,9 +6,79 @@
 
 Inspired by [SeedThree](https://github.com/SkyeShark/SeedThree) — live preset tuning, scene, one-click glTF export — for the scarce browser-ocean space.
 
+[![CI](https://github.com/reed-soul/SeedOcean/actions/workflows/ci.yml/badge.svg)](https://github.com/reed-soul/SeedOcean/actions/workflows/ci.yml)
+[![Live demo](https://img.shields.io/badge/demo-GitHub%20Pages-0a5f7a)](https://reed-soul.github.io/SeedOcean/)
+
+![SeedOcean surface demo](docs/assets/surface.png)
+
 </div>
 
 > **Status: `v0.5.0-alpha`.** Full surface pipeline, screen-space refraction/reflection, wake interaction, multi-body buoyancy, and shared underwater caustics.
+
+## Live demo
+
+**https://reed-soul.github.io/SeedOcean/**
+
+Orbit below the surface for underwater mode. A boat leaves a wake; the red buoy and wooden crates float on the live wave field.
+
+| Surface + wake | Underwater caustics |
+|---|---|
+| ![Wake and refraction](docs/assets/wake.png) | ![Underwater](docs/assets/underwater.png) |
+
+![Animated demo](docs/assets/demo.gif)
+
+## Install
+
+```bash
+npm install seedocean three
+```
+
+Requires **WebGPU** (Chrome/Edge 113+).
+
+## Quick start (library)
+
+```javascript
+import * as THREE from 'three/webgpu';
+import { SeedOcean } from 'seedocean';
+
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+await renderer.init();
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 6000);
+camera.position.set(0, 14, 48);
+
+const ocean = await SeedOcean.create({
+  renderer,
+  scene,
+  camera,
+  preset: 'coastal',   // calm | coastal | storm
+});
+
+function animate() {
+  ocean.tick();
+  requestAnimationFrame(animate);
+}
+animate();
+```
+
+### API
+
+| Method | Description |
+|--------|-------------|
+| `SeedOcean.create(options)` | Build ocean + optional seafloor, underwater post, buoyancy |
+| `ocean.update(dt?)` | Advance FFT, buoyancy, wake; returns `{ t, underwaterMix }` |
+| `ocean.render()` | Render via underwater pipeline |
+| `ocean.tick()` | `update()` + `render()` |
+| `ocean.applyPreset(id)` | Switch calm / coastal / storm |
+| `ocean.exportGLB()` | Bake current wave field to `.glb` |
+| `ocean.dispose()` | Cleanup |
+
+Options: `environment`, `seafloor`, `underwater`, `buoyancy`, `demoObjects`, `validateFFT`.
+
+Re-exports: `PRESETS`, `buildFFTOcean`, `BuoyancySampler`, `validateFFT`, …
 
 ## What's in it
 
@@ -16,13 +86,29 @@ Inspired by [SeedThree](https://github.com/SkyeShark/SeedThree) — live preset 
 - **Infinite clipmap** — camera-snapped nested rings (~1.5 km)
 - **Subsurface scattering** — sun-lit crest glow
 - **Jacobian foam** — breaking crest detection
-- **Screen refraction / reflection** — viewport backdrop + planar reflector on the surface
-- **Wake field** — boat stamps height + foam into a tiling CPU texture sampled on the GPU
-- **Multi-body buoyancy** — spring-damper physics with pitch/roll from wave slope
-- **Underwater rendering** — depth tint, Snell's window, god rays (post-process)
-- **Shared caustics** — sea floor, buoy, boat hull, and floating crates
-- **Optimized readback** — buoyancy samples cascade 0 only (~3× less GPU transfer)
+- **Screen refraction / reflection** — viewport backdrop + planar reflector
+- **Wake field** — boat stamps height + foam into a tiling CPU texture
+- **Multi-body buoyancy** — spring-damper physics with pitch/roll
+- **Underwater rendering** — depth tint, Snell's window, god rays
+- **Shared caustics** — sea floor, buoy, boat hull, floating crates
+- **Optimized readback** — buoyancy samples cascade 0 only
 - **Three presets** + **glTF export**
+
+## Run locally
+
+```bash
+git clone https://github.com/reed-soul/SeedOcean.git
+cd SeedOcean
+npm install
+npm run dev      # http://localhost:5391
+```
+
+```bash
+npm run build          # production bundle
+npm run build:pages    # GitHub Pages (base /SeedOcean/)
+npm run test:fft       # GPU FFT self-test (needs Chromium + WebGPU)
+npm run capture        # regenerate docs/assets screenshots + GIF
+```
 
 ## Roadmap
 
@@ -32,41 +118,19 @@ Inspired by [SeedThree](https://github.com/SkyeShark/SeedThree) — live preset 
 | 2 ✅ | WebGPU FFT/IFFT (JONSWAP) |
 | 3 ✅ | Clipmap, SSS, 3rd cascade |
 | 4 ✅ | Underwater, caustics, buoyancy |
-| 5 ✅ | Refraction/reflection, wake, multi-body physics *(this release)* |
-
-## Requirements
-
-**WebGPU-capable browser** — Chrome/Edge 113+.
-
-## Run it
-
-```bash
-npm install
-npm run dev      # http://localhost:5391
-```
-
-Orbit below the surface for underwater mode. A boat leaves a wake; the red buoy and wooden crates float on the live wave field.
-
-```bash
-npm run build
-npm run preview
-```
+| 5 ✅ | Refraction/reflection, wake, multi-body physics |
+| 6 ✅ | GitHub Pages, npm API, CI *(this release)* |
 
 ## Layout
 
 ```
-src/core/
-  fft/                spectrum · IFFT · cascades · surface material
-  clipmap.js          infinite ocean mesh
-  wake-field.js       CPU wake texture (boat interaction)
-  caustics.js         shared underwater caustic pattern
-  submerged-material.js  caustics on floating objects
-  buoyancy-body.js    multi-body spring-damper physics
-  underwater-post.js  Snell + fog + god rays
-  seafloor.js         caustic sea floor
-  buoyancy.js         throttled height readback
-  wave-sampler.js     CPU/GPU displacement sampling
-  boat.js             demo boat mesh
+src/
+  index.js            public API
+  seedocean.js        SeedOcean.create()
+  core/fft/           spectrum · IFFT · cascades · surface material
+  core/wake-field.js  CPU wake texture
+  core/caustics.js    shared underwater caustic pattern
+  presets/            calm · coastal · storm
 ```
 
 ## Reference

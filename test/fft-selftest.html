@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SeedOcean FFT self-test</title>
+  </head>
+  <body>
+    <script type="module">
+      import * as THREE from 'three/webgpu';
+      import { validateFFT } from '../src/core/fft/fft.js';
+
+      async function run() {
+        const renderer = new THREE.WebGPURenderer();
+        await renderer.init();
+        const result = await validateFFT(renderer, 128);
+        window.__FFT_RESULT__ = result;
+        document.body.dataset.status = result.pass ? 'pass' : 'fail';
+      }
+
+      run().catch((e) => {
+        window.__FFT_ERROR__ = e?.message ?? String(e);
+        document.body.dataset.status = 'error';
+      });
+    </script>
+  </body>
+</html>

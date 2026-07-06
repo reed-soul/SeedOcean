@@ -1,9 +1,18 @@
 import { defineConfig } from 'vite';
 
 // 5391 — adjacent to SeedThree (5390), avoids common dev ports.
-export default defineConfig({
+// gh-pages mode sets base for https://reed-soul.github.io/SeedOcean/
+export default defineConfig(({ mode }) => ({
+  base: mode === 'gh-pages' ? '/SeedOcean/' : '/',
+  esbuild: {
+    target: 'esnext',
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      target: 'esnext',
+    },
+  },
   build: {
-    // WebGPU + three.js r184 use top-level await in the WebGPU capability probe.
     target: 'esnext',
   },
   server: {
@@ -14,4 +23,4 @@ export default defineConfig({
     port: 5391,
     strictPort: true,
   },
-});
+}));
