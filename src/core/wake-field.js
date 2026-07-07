@@ -19,6 +19,7 @@ export class WakeField {
     this.texture.wrapS = RepeatWrapping;
     this.texture.wrapT = RepeatWrapping;
     this.texture.needsUpdate = true;
+    this.dirty = false;
   }
 
   /** Stamp a wake kernel at world XZ from object velocity. */
@@ -46,6 +47,7 @@ export class WakeField {
         const f = impulse * falloff * 110;
         data[i] = Math.min(MAX_WAKE, data[i] + h);
         data[i + 1] = Math.min(MAX_WAKE, data[i + 1] + f);
+        this.dirty = true;
       }
     }
   }
@@ -55,12 +57,19 @@ export class WakeField {
     const hDecay = Math.pow(0.25, dt);
     const fDecay = Math.pow(0.45, dt);
     for (let i = 0; i < d.length; i += 4) {
-      d[i] = Math.floor(d[i] * hDecay);
-      d[i + 1] = Math.floor(d[i + 1] * fDecay);
+      const nh = Math.floor(d[i] * hDecay);
+      const nf = Math.floor(d[i + 1] * fDecay);
+      if (nh !== d[i] || nf !== d[i + 1]) {
+        d[i] = nh;
+        d[i + 1] = nf;
+        this.dirty = true;
+      }
     }
   }
 
   upload() {
+    if (!this.dirty) return;
     this.texture.needsUpdate = true;
+    this.dirty = false;
   }
 }

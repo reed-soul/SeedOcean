@@ -24,7 +24,7 @@ export class BuoyancySampler {
     if (this.pending) return this.pending;
     if (++this.tick % this.interval !== 0) return null;
 
-    this.pending = readBuoyancyBuffer(renderer, this.simulator, 0)
+    this.pending = readBuoyancyBuffer(renderer, this.simulator, 0, this.buffer)
       .then((buffer) => {
         this.buffer = buffer;
         this.pending = null;

@@ -59,13 +59,19 @@ export function sampleSlopeFromBuffer(x, z, buffer) {
 }
 
 /** Read only cascade 0 — ~3× less GPU readback than all cascades. */
-export async function readBuoyancyBuffer(renderer, simulator, cascadeIndex = 0) {
+export async function readBuoyancyBuffer(renderer, simulator, cascadeIndex = 0, reuse = null) {
   const c = simulator.cascades[cascadeIndex];
-  const dxdz = new Float32Array(await renderer.getArrayBufferAsync(c.DxDz.value));
-  const dydxz = new Float32Array(await renderer.getArrayBufferAsync(c.DyDxz.value));
+  const dxdzRaw = await renderer.getArrayBufferAsync(c.DxDz.value);
+  const dydxzRaw = await renderer.getArrayBufferAsync(c.DyDxz.value);
+  const len = dxdzRaw.byteLength / 4;
+  const pool = reuse ?? {};
+  if (!pool.dxdz || pool.dxdz.length !== len) pool.dxdz = new Float32Array(len);
+  if (!pool.dydxz || pool.dydxz.length !== len) pool.dydxz = new Float32Array(len);
+  pool.dxdz.set(new Float32Array(dxdzRaw));
+  pool.dydxz.set(new Float32Array(dydxzRaw));
   return {
-    dxdz,
-    dydxz,
+    dxdz: pool.dxdz,
+    dydxz: pool.dydxz,
     lengthScale: c.lengthScale,
     N: simulator.N,
     lambda: simulator.lambda.value,

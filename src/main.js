@@ -33,6 +33,7 @@ async function init() {
     preset: initialPreset,
     demoObjects: true,
     quality: 'quality',
+    validateFFT: true,
   });
 
   controls = new OrbitControls(seedOcean.camera, seedOcean.renderer.domElement);

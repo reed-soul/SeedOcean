@@ -25,7 +25,7 @@ export async function buildFFTOcean(renderer, preset, state, quality = 'perf') {
   const shading = createShadingUniforms(preset);
   applyShadingUniforms(shading, preset, state);
 
-  const { material, reflector: surfaceReflector } = createFFTSurfaceMaterial(
+  const { material, reflector: surfaceReflector, detailTex } = createFFTSurfaceMaterial(
     simulator.cascades,
     spectrumParams.lengthScales,
     shading,
@@ -107,6 +107,8 @@ export async function buildFFTOcean(renderer, preset, state, quality = 'perf') {
     simulator,
     shading,
     wakeField,
+    reflector: surfaceReflector,
+    detailTex,
     spectrumParams,
     waterType,
     applyPreset,

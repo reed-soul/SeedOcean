@@ -61,6 +61,11 @@ export class BuoyancySystem {
     return body;
   }
 
+  remove(object) {
+    const idx = this.bodies.findIndex((b) => b.object === object);
+    if (idx >= 0) this.bodies.splice(idx, 1);
+  }
+
   /** Set the global current direction (unit, XZ) and speed (m/s). */
   setCurrent(dirX, dirZ, speed) {
     const len = Math.hypot(dirX, dirZ) || 1;

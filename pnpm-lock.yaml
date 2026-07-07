@@ -11,13 +11,13 @@ importers:
       lil-gui:
         specifier: ^0.21.0
         version: 0.21.0
-      three:
-        specifier: ^0.184.0
-        version: 0.184.0
     devDependencies:
       playwright:
         specifier: ^1.52.0
         version: 1.61.1
+      three:
+        specifier: ^0.184.0
+        version: 0.184.0
       typescript:
         specifier: ^5.6.0
         version: 5.9.3

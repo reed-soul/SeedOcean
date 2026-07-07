@@ -17,7 +17,9 @@ import { buildAtmosphere } from './core/atmosphere.js';
 import { createSubmergedMaterial } from './core/submerged-material.js';
 import { createUnderwaterPipeline } from './core/underwater-post.js';
 import { PRESETS, DEFAULT_PRESET } from './presets/index.js';
-import { stateFromPreset } from './ui/controls.js';
+import { resolvePreset } from './presets/resolve.js';
+import { stateFromPreset } from './state.js';
+import { disposeOcean, disposeSeafloor, disposeDemoObject } from './core/dispose.js';
 
 const VERSION = '0.6.0-alpha';
 
@@ -37,7 +39,7 @@ const BELOW_FOG = { color: 0x032838, density: 0.0032 };
  * @property {boolean} [underwater=true]
  * @property {boolean} [buoyancy=true]
  * @property {boolean} [demoObjects=false] — buoy, boat, crates
- * @property {boolean} [validateFFT=true]
+ * @property {boolean} [validateFFT=false]
  * @property {number} [fftGrid=128] — size used only by the FFT self-test
  * @property {'perf'|'quality'} [quality='perf'] — 128² vs 256² simulation grid
  */
@@ -65,7 +67,7 @@ export class SeedOcean {
   async _init() {
     const opts = this.options;
     const presetInput = opts.preset ?? DEFAULT_PRESET;
-    this.preset = typeof presetInput === 'string' ? PRESETS[presetInput] : presetInput;
+    this.preset = resolvePreset(presetInput);
     this.state = { ...stateFromPreset(this.preset), ...(opts.state ?? {}) };
 
     // Detect WebGPU once. When unavailable we fall back to the Gerstner-wave
@@ -119,7 +121,7 @@ export class SeedOcean {
 
     await this.renderer.init();
 
-    if (this.isWebGPU && opts.validateFFT !== false) {
+    if (this.isWebGPU && opts.validateFFT === true) {
       this.fftTest = await validateFFT(this.renderer, opts.fftGrid ?? 128);
     }
 
@@ -295,7 +297,7 @@ export class SeedOcean {
   }
 
   async applyPreset(idOrPreset, nextState) {
-    const nextPreset = typeof idOrPreset === 'string' ? PRESETS[idOrPreset] : idOrPreset;
+    const nextPreset = resolvePreset(idOrPreset);
     const prevType = this.preset?.waterType ?? 'ocean';
     const nextType = nextPreset.waterType ?? 'ocean';
     this.preset = nextPreset;
@@ -330,10 +332,12 @@ export class SeedOcean {
     // --- Tear down water-type-specific scene graph ---
     if (this.ocean) {
       this.scene.remove(this.ocean.root);
+      disposeOcean(this.ocean);
       this.ocean = null;
     }
     if (this.seafloor) {
       this.scene.remove(this.seafloor.mesh);
+      disposeSeafloor(this.seafloor);
       this.seafloor = null;
     }
     this._removeDemoObjects();
@@ -365,8 +369,20 @@ export class SeedOcean {
     this.scene.add(this.seafloor.mesh);
 
     // --- Rebuild buoyancy sampler against the new simulator ---
-    if (this.isWebGPU && opts.buoyancy !== false) {
-      this.buoyancy = new BuoyancySampler(this.ocean.simulator, 3);
+    if (opts.buoyancy !== false) {
+      if (this.isWebGPU) {
+        this.buoyancy = new BuoyancySampler(this.ocean.simulator, 3);
+      } else {
+        this.buoyancy = {
+          getHeight: (x, z) => this.ocean.getHeight(x, z),
+          getSlope: () => ({ dx: 0, dz: 0 }),
+          requestReadback: () => null,
+          underwaterMix: (camY, x, z) => {
+            const s = this.ocean.getHeight(x, z);
+            return Math.min(1, Math.max(0, (s - camY + 0.25) / 1.2));
+          },
+        };
+      }
       this.buoyancySystem = new BuoyancySystem(this.buoyancy);
     }
 
@@ -410,11 +426,15 @@ export class SeedOcean {
 
   /** Remove boat/buoy/crates added by _buildDemoObjects (for scene rebuild). */
   _removeDemoObjects() {
-    const scene = this.scene;
-    const drop = (obj) => { if (obj) { scene.remove(obj); this.buoyancySystem?.bodies?.splice(0); } };
-    if (this.boat) { scene.remove(this.boat); this.boat = null; }
-    if (this.buoy) { scene.remove(this.buoy); this.buoy = null; }
-    if (this.crates) { this.crates.forEach((c) => scene.remove(c)); this.crates = null; }
+    const { scene, buoyancySystem } = this;
+    disposeDemoObject(scene, buoyancySystem, this.boat);
+    this.boat = null;
+    disposeDemoObject(scene, buoyancySystem, this.buoy);
+    this.buoy = null;
+    if (this.crates) {
+      for (const crate of this.crates) disposeDemoObject(scene, buoyancySystem, crate);
+      this.crates = null;
+    }
   }
 
   /** Push preset.flow into the buoyancy system as the global current. */
@@ -558,6 +578,40 @@ export class SeedOcean {
 
   dispose() {
     this.renderer.setAnimationLoop(null);
+
+    this._removeDemoObjects();
+
+    if (this.ocean) {
+      this.scene.remove(this.ocean.root);
+      disposeOcean(this.ocean);
+      this.ocean = null;
+    }
+
+    if (this.seafloor) {
+      this.scene.remove(this.seafloor.mesh);
+      disposeSeafloor(this.seafloor);
+      this.seafloor = null;
+    }
+
+    if (this.atmosphere) {
+      this.scene.remove(this.atmosphere.group);
+      this.atmosphere.dispose();
+      this.atmosphere = null;
+    }
+
+    if (this.env) {
+      this.scene.remove(this.env.sunLight);
+      this.scene.remove(this.env.hemi);
+      if (this.env.sky) this.scene.remove(this.env.sky);
+      if (this.env.stars) this.scene.remove(this.env.stars);
+      this.env.dispose();
+      this.env = null;
+    }
+
+    this.buoyancy = null;
+    this.buoyancySystem = null;
+    this.underwater = null;
+
     if (this._ownsRenderer) this.renderer.dispose();
   }
 }

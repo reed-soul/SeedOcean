@@ -26,27 +26,18 @@
 // would write (once it grows one — the format is forward-compatible).
 
 import { PRESETS, DEFAULT_PRESET, PRESET_FORMAT, normalizePreset } from '../presets/index.js';
+import { resolvePreset } from '../presets/resolve.js';
 import { buildSpectrumParams } from '../core/fft/defaults.js';
 import { buildClipmapMesh } from '../core/clipmap.js';
 import { buildPatchMesh } from '../core/water-patch.js';
 import { buildRiverMesh, defaultRiverCenterline } from '../core/river-mesh.js';
 import { makeFbmHeight, makeBasinFn, makeRiverChannelHeight } from '../core/terrain.js';
 import { statsOf, spectrumStats } from '../core/stats.js';
-import { stateFromPreset } from '../ui/controls.js';
+import { stateFromPreset } from '../state.js';
 
-export { PRESETS, DEFAULT_PRESET, PRESET_FORMAT, normalizePreset };
+export { PRESETS, DEFAULT_PRESET, PRESET_FORMAT, normalizePreset, resolvePreset };
 
 // ---- preset resolution -----------------------------------------------------
-
-const resolvePreset = (ref) => {
-  if (!ref) return PRESETS[DEFAULT_PRESET];
-  if (typeof ref === 'string') {
-    const p = PRESETS[ref];
-    if (!p) throw new Error(`[seedocean] unknown preset "${ref}". Known: ${Object.keys(PRESETS).join(', ')}`);
-    return p;
-  }
-  return normalizePreset(ref);
-};
 
 // ---- introspection ---------------------------------------------------------
 
@@ -113,7 +104,7 @@ const SCHEMA_FOLDERS = Object.keys(SCHEMA);
  * @returns {{ preset: string, name: string, waterType: string, folders: Record<string, object[]> }}
  */
 export function getSchema(presetRef = DEFAULT_PRESET) {
-  const p = resolvePreset(presetRef);
+  const p = resolvePreset(presetRef, { strict: true });
   const folders = {};
   for (const [folder, knobs] of Object.entries(SCHEMA)) {
     folders[folder] = knobs.map((k) => {
@@ -300,7 +291,7 @@ function terrainEnvelope(preset) {
  * }}
  */
 export function design({ preset = DEFAULT_PRESET, seed, controls = {}, quality = 'perf' } = {}) {
-  const base = resolvePreset(preset);
+  const base = resolvePreset(preset, { strict: true });
   const baseState = stateFromPreset(base);
   const state = { ...baseState, ...(seed !== undefined ? { seed } : {}), ...controls };
   // Seed must be set: re-rolls FFT noise deterministically.
@@ -330,7 +321,7 @@ export function design({ preset = DEFAULT_PRESET, seed, controls = {}, quality =
  * @param {{ preset?: string|object, seed?: number, controls?: object }} o
  */
 export function toPreset({ preset = DEFAULT_PRESET, seed, controls = {} } = {}) {
-  const base = resolvePreset(preset);
+  const base = resolvePreset(preset, { strict: true });
   const state = { ...stateFromPreset(base), ...(seed !== undefined ? { seed } : {}), ...controls };
   // Fold the live tunables back onto the preset so the JSON is self-describing:
   // a consumer can hand it straight to SeedOcean.create({ preset }) without a

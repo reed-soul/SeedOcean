@@ -11,10 +11,11 @@ export { buildPoolScene } from './core/pool-scene.js';
 export { buildRiverMesh, defaultRiverCenterline } from './core/river-mesh.js';
 export { exportFFTOceanGLB } from './core/export-glb.js';
 export { statsOf, spectrumStats, bandStats } from './core/stats.js';
-export { stateFromPreset } from './ui/controls.js';
+export { stateFromPreset } from './state.js';
 
-// Auto-registering <water-canvas> custom element. Importing this side-effect
-// module registers the element; it also re-exports the class for tests.
+// Importing the main entry (`seedocean` / `src/index.js`) auto-registers the
+// `<water-canvas>` custom element as a side effect. For explicit control, import
+// `seedocean/web-component` directly — it registers the element when evaluated.
 export { SeedOceanCanvas } from './web-component.js';
 
 // Headless design API — no-GPU design/introspection surface (listPresets /

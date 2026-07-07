@@ -204,7 +204,7 @@ export function applyShadingUniforms(shading, preset, state) {
   shading.waterColor.value.set(state.waterColor ?? preset.waterColor);
   shading.deepColor.value.set(state.deepColor ?? preset.deepColor);
   shading.scatterColor.value.set(preset.scatterColor ?? 0x2e8f8f);
-  shading.foamColor.value.set(preset.foamColor);
+  shading.foamColor.value.set(preset.foamColor ?? 0xd0ecff);
   shading.foamStrength.value = state.foamStrength ?? preset.foamStrength;
   shading.foamThreshold.value = preset.foamThreshold ?? 0.42;
   shading.foamScale.value = preset.foamScale ?? 2.2;

@@ -47,6 +47,10 @@ export function buildSpectrumParams(preset, state, quality = 'perf') {
   const windDir = state.windDirection ?? s.windDirection ?? preset.sky?.azimuth ?? 45;
   const amp = state.waveAmp ?? 1;
   const baseN = QUALITY_GRID[quality] ?? FFT_DEFAULTS.N;
+  const N = s.N ?? baseN;
+  if (N < 2 || (N & (N - 1)) !== 0) {
+    throw new Error(`[seedocean] FFT grid N must be a power of two (got ${N})`);
+  }
 
   return {
     ...FFT_DEFAULTS,
@@ -67,6 +71,6 @@ export function buildSpectrumParams(preset, state, quality = 'perf') {
     swell: { ...FFT_DEFAULTS.swell, ...(s.swell ?? {}) },
     lengthScales: s.lengthScales ?? FFT_DEFAULTS.lengthScales,
     cascades: s.cascades ?? FFT_DEFAULTS.cascades,
-    N: s.N ?? baseN,
+    N,
   };
 }

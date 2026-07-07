@@ -16,6 +16,7 @@ export interface SkyParams {
   exposure: number;
   turbidity?: number;
   cloudCoverage: number;
+  starsDensity?: number;
 }
 
 /** One band of the JONSWAP spectrum (wind-sea `local` or long-period `swell`). */
@@ -164,6 +165,7 @@ export interface OceanState {
   azimuth: number;
   exposure: number;
   cloudCoverage: number;
+  starsDensity: number;
 }
 
 export interface SeedOceanOptions {
@@ -323,6 +325,7 @@ export declare class BuoyancyBody {
 export declare class BuoyancySystem {
   constructor(sampler: BuoyancySampler);
   add(body: BuoyancyBody): void;
+  remove(object: THREE.Object3D): void;
   getBody(object: THREE.Object3D): BuoyancyBody | undefined;
   /** Set global river current — dir (unit XZ) and speed (m/s). */
   setCurrent(dirX: number, dirZ: number, speed: number): void;
@@ -336,6 +339,7 @@ export interface WakeField {
   stamp(x: number, z: number, vx: number, vz: number, radius?: number, strength?: number): void;
   decay(dt: number): void;
   upload(): void;
+  dirty?: boolean;
 }
 
 export interface AtmosphereHandle {

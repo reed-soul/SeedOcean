@@ -7,6 +7,10 @@
 // Mirrors src/main.js's bootstrap: capability check → SeedOcean.create →
 // setAnimationLoop(update → render). The host element becomes the canvas
 // container. Disconnection disposes the renderer.
+//
+// WebGL2 fallback: when WebGPU is unavailable, SeedOcean runs the Gerstner
+// path (no FFT compute, no underwater post, analytical buoyancy). Visual
+// identity is preserved but wake/refraction quality is reduced.
 
 import WebGPU from 'three/addons/capabilities/WebGPU.js';
 import { SeedOcean } from './seedocean.js';
@@ -15,6 +19,7 @@ class SeedOceanCanvas extends HTMLElement {
   constructor() {
     super();
     this._seedOcean = null;
+    this._presetDebounce = null;
     this._onResize = this._onResize.bind(this);
   }
 
@@ -30,18 +35,24 @@ class SeedOceanCanvas extends HTMLElement {
   async connectedCallback() {
     if (this._seedOcean) return;
     if (!WebGPU.isAvailable()) {
+      console.warn(
+        '[water-canvas] WebGPU unavailable — running in WebGL2 fallback mode (Gerstner waves).',
+      );
+    }
+
+    try {
+      this._seedOcean = await SeedOcean.create({
+        container: this,
+        preset: this.getAttribute('preset') || undefined,
+        quality: this.getAttribute('quality') === 'quality' ? 'quality' : 'perf',
+        demoObjects: this.hasAttribute('demo'),
+      });
+    } catch (err) {
       this.dispatchEvent(new CustomEvent('error', {
-        detail: { message: 'WebGPU is required. Use Chrome 113+ or Edge 113+.' },
+        detail: { message: err?.message ?? String(err) },
       }));
       return;
     }
-
-    this._seedOcean = await SeedOcean.create({
-      container: this,
-      preset: this.getAttribute('preset') || undefined,
-      quality: this.getAttribute('quality') === 'quality' ? 'quality' : 'perf',
-      demoObjects: this.hasAttribute('demo'),
-    });
 
     this._onResize();
     window.addEventListener('resize', this._onResize);
@@ -59,7 +70,14 @@ class SeedOceanCanvas extends HTMLElement {
     const so = this._seedOcean;
     if (!so) return;
     if (name === 'preset' && value) {
-      so.applyPreset(value);
+      clearTimeout(this._presetDebounce);
+      this._presetDebounce = setTimeout(() => {
+        void so.applyPreset(value).catch((err) => {
+          this.dispatchEvent(new CustomEvent('error', {
+            detail: { message: err?.message ?? String(err) },
+          }));
+        });
+      }, 150);
     }
   }
 
@@ -72,6 +90,7 @@ class SeedOceanCanvas extends HTMLElement {
 
   disconnectedCallback() {
     window.removeEventListener('resize', this._onResize);
+    clearTimeout(this._presetDebounce);
     if (this._seedOcean) {
       this._seedOcean.dispose();
       this._seedOcean = null;
