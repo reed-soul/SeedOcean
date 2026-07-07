@@ -36,8 +36,17 @@ export async function buildFFTOcean(renderer, preset, state, quality = 'perf') {
   const waterType = preset.waterType ?? 'ocean';
   let surface;
   if (waterType === 'pool' || waterType === 'lake') {
-    surface = buildPatchMesh(material, preset.patch ?? { width: 40, length: 40, cells: 64 });
+    // Lakes default to a circular disc so the shoreline reads as a basin;
+    // pools stay rectangular. preset.patch can override shape explicitly.
+    const patchDefaults = waterType === 'lake'
+      ? { width: 80, length: 80, cells: 96, shape: 'circle', segments: 96 }
+      : { width: 40, length: 40, cells: 64, shape: 'rect' };
+    surface = buildPatchMesh(material, { ...patchDefaults, ...(preset.patch ?? {}) });
     // Bounded water: clipOrigin stays at (0,0); patch vertices are local-to-origin.
+  } else if (waterType === 'river') {
+    // River ribbon mesh is built later (Stage 7); for now route through patch
+    // so applyPreset/applyLiveTuning stay consistent during handoff.
+    surface = buildPatchMesh(material, preset.patch ?? { width: 20, length: 120, cells: 64 });
   } else {
     surface = buildClipmapMesh(material, { patchHalf: 56, levels: 4, cells: 32 });
   }

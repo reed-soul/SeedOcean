@@ -12,6 +12,7 @@ export { bioluminescent } from './bioluminescent.js';
 export { cartoon } from './cartoon.js';
 export { ink } from './ink.js';
 export { pool } from './pool.js';
+export { lake } from './lake.js';
 export { gale } from './gale.js';
 export { storm } from './storm.js';
 export { tempest } from './tempest.js';
@@ -30,6 +31,7 @@ import { bioluminescent } from './bioluminescent.js';
 import { cartoon } from './cartoon.js';
 import { ink } from './ink.js';
 import { pool } from './pool.js';
+import { lake } from './lake.js';
 import { gale } from './gale.js';
 import { storm } from './storm.js';
 import { tempest } from './tempest.js';
@@ -54,6 +56,7 @@ export const PRESETS = {
   cartoon,
   ink,
   pool,
+  lake,
   gale,
   storm,
   tempest,

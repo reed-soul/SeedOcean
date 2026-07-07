@@ -139,6 +139,7 @@ export class SeedOcean {
           sunDir: this.ocean.shading.sunDir,
           size: this.preset.terrain?.size ?? 400,
           resolution: this.preset.terrain?.resolution ?? 128,
+          seed: this.preset.seed,
         });
       } else {
         this.seafloor = buildSeafloor(this.preset, this.ocean.shading.sunDir);

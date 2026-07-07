@@ -80,6 +80,40 @@ export function makeFbmHeight({
 }
 
 /**
+ * Wrap a height function into a basin profile: inside `basinRadius` the floor
+ * is roughly `basinFloor` (with low-amplitude relief so the lake bed isn't a
+ * perfect disc), and outside it rises smoothly to `rimHeight` over `rimFalloff`
+ * meters. This is what gives the lake its shoreline — the water patch (radius
+ * ≈ basinRadius) meets terrain that climbs out of the basin.
+ */
+function makeBasinFn(inner, {
+  size,
+  basinRadius = 30,
+  basinFloor = -6,
+  rimHeight = 8,
+  rimFalloff = 1.5,
+} = {}) {
+  const half = size / 2;
+  /** @param {number} x @param {number} z */
+  return function basinAt(x, z) {
+    const r = Math.sqrt(x * x + z * z);
+    // Soft bowl: 0 inside basinRadius, ramps to 1 at the rim.
+    // We use a smoothstep from basinRadius to basinRadius + rimFalloff... but
+    // for a lake we actually want the rim to keep climbing beyond the patch
+    // so the surrounding hills read as a valley. So we extend the ramp to the
+    // terrain edge.
+    const edge = Math.max(basinRadius + rimFalloff, half * 0.6);
+    const t = THREE.MathUtils.smoothstep(r, basinRadius, edge);
+    // fBm contributes natural relief; we dampen it inside the basin so the
+    // underwater floor stays near basinFloor (visible through clear lake water).
+    const relief = inner(x, z);
+    const floor = basinFloor + relief * 0.15;
+    const rim = rimHeight + relief * 0.6;
+    return floor * (1 - t) + rim * t;
+  };
+}
+
+/**
  * @param {object} opts
  * @param {number} [opts.size=400]                 square world extent, meters
  * @param {number} [opts.resolution=128]           subdivisions per side
@@ -96,14 +130,26 @@ export function buildTerrain({
   sunDir,
   seed,
 } = {}) {
+  const terrainCfg = preset.terrain ?? {};
   // Default to fBm; heightFn is shared between mesh displacement and getHeight,
   // so callers can also pass a custom sampler (e.g. a basin-shaped function).
-  const hFn = heightFn ?? makeFbmHeight({
+  // When terrain.basin is set we wrap the fBm in a bowl profile so the patch
+  // sits in a lake basin: flat-ish at the center, rising toward the rim.
+  const baseFn = heightFn ?? makeFbmHeight({
     seed: seed ?? preset.seed ?? 1,
-    amplitude: preset.terrainAmplitude ?? 8,
-    frequency: preset.terrainFrequency ?? 0.04,
-    octaves: preset.terrainOctaves ?? 4,
+    amplitude: terrainCfg.amplitude ?? 8,
+    frequency: terrainCfg.frequency ?? 0.04,
+    octaves: terrainCfg.octaves ?? 4,
   });
+  const hFn = terrainCfg.basin
+    ? makeBasinFn(baseFn, {
+        size,
+        basinRadius: terrainCfg.basinRadius ?? Math.min(preset.patch?.width ?? 60, preset.patch?.length ?? 60) / 2,
+        basinFloor: terrainCfg.basinFloor ?? (preset.seafloorDepth ?? -6),
+        rimHeight: terrainCfg.rimHeight ?? (terrainCfg.amplitude ?? 8),
+        rimFalloff: terrainCfg.rimFalloff ?? 1.5,
+      })
+    : baseFn;
 
   // ---- Mesh: PlaneGeometry rotated to XZ, vertices displaced by hFn ----
   const geometry = new THREE.PlaneGeometry(size, size, resolution, resolution);

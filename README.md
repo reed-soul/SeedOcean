@@ -33,9 +33,15 @@ Persistent foam · 10 sea-state presets · buoyancy · underwater · spray & rai
     <td width="25%"><sub>Long Swell</sub><br><img src="docs/assets/presets/swell.webp"></td>
     <td width="25%"><sub>Swimming Pool</sub><br><img src="docs/assets/presets/pool.webp"></td>
   </tr>
+  <tr>
+    <td width="25%"><sub>Mountain Lake</sub><br><img src="docs/assets/presets/lake.webp"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
 </table>
 
-> **Status: `v0.7.0-alpha`.** Twelve of seventeen presets above — realistic day/night/tropical/polar/bioluminescent, cel-shaded **Cartoon** and **Ink Wash** stylized modes, and bounded **Pool** water (the first non-ocean water type). FFT ocean with persistent/advected foam, a 256² quality mode, TypeScript types, a `<water-canvas>` web component, atmospheric spray + rain, a procedural star field, and a WebGL2/Gerstner fallback that keeps the API identical when WebGPU is unavailable.
+> **Status: `v0.7.1-alpha`.** Thirteen of eighteen presets above — realistic day/night/tropical/polar/bioluminescent, cel-shaded **Cartoon** and **Ink Wash** stylized modes, and bounded water in two forms: a rectangular **Pool** and a circular **Mountain Lake** sitting in a procedural fBm terrain basin. FFT ocean with persistent/advected foam, a 256² quality mode, TypeScript types, a `<water-canvas>` web component, atmospheric spray + rain, a procedural star field, and a WebGL2/Gerstner fallback that keeps the API identical when WebGPU is unavailable.
 
 ## Live demo
 
@@ -124,7 +130,7 @@ Re-exports: `PRESETS`, `buildFFTOcean`, `BuoyancySampler`, `validateFFT`, …
 - **Shared caustics** — sea floor, buoy, boat hull, floating crates
 - **Atmosphere** — wind-blown sea spray at breaking crests + a screen rain layer (zero-cost when intensity is 0)
 - **WebGL2 fallback** — when WebGPU is unavailable, a Gerstner-wave renderer keeps the same API and visual identity
-- **17 presets** — Calm Bay · Dawn Glass · Sea Mist · Light Breeze · Coastal Chop · Long Swell · **Tropical Reef** · Golden Sunset · **Moonlit** · **Arctic** · **Bioluminescent** · **Cartoon** · **Ink Wash** · **Pool** · Gale · Open Storm · Tempest
+- **18 presets** — Calm Bay · Dawn Glass · Sea Mist · Light Breeze · Coastal Chop · Long Swell · **Tropical Reef** · Golden Sunset · **Moonlit** · **Arctic** · **Bioluminescent** · **Cartoon** · **Ink Wash** · **Pool** · **Mountain Lake** · Gale · Open Storm · Tempest
 - **TypeScript types** + **`<water-canvas>` web component** + **glTF export**
 
 ## Run locally
@@ -153,8 +159,9 @@ pnpm capture        # regenerate docs/assets screenshots + GIF
 | 4 ✅ | Underwater, caustics, buoyancy |
 | 5 ✅ | Refraction/reflection, wake, multi-body physics |
 | 6 ✅ | GitHub Pages, npm API, CI |
-| 7 ✅ | v0.6/v0.7 — 17 presets + star field + cel mode + bounded pool water, quality mode, persistent foam, TS types, web component, spray/rain, WebGL2 fallback *(current)* |
-| 8 🔜 | Rivers / shoreline editor / flowmap painter |
+| 7 ✅ | v0.6/v0.7 — 17 presets + star field + cel mode + bounded pool water, quality mode, persistent foam, TS types, web component, spray/rain, WebGL2 fallback |
+| 8 🔨 | v0.7.1 — fBm terrain subsystem (`buildTerrain`) + Mountain Lake preset (circular water in a procedural basin) *(current)* |
+| 9 🔜 | Rivers / shoreline editor / flowmap painter |
 
 ## Layout
 

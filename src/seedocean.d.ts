@@ -82,9 +82,20 @@ export interface Preset {
   /** Water mesh type — selects clipmap vs bounded patch vs terrain basin. */
   waterType?: 'ocean' | 'pool' | 'lake' | 'river';
   /** Bounded-water patch dimensions (pool/lake). */
-  patch?: { width: number; length: number; cells: number };
+  patch?: { width: number; length: number; cells: number; shape?: 'rect' | 'circle'; segments?: number };
   /** Terrain basin config (lake/river) — passed to buildTerrain. */
-  terrain?: { size?: number; resolution?: number; amplitude?: number; frequency?: number; octaves?: number };
+  terrain?: {
+    size?: number;
+    resolution?: number;
+    amplitude?: number;
+    frequency?: number;
+    octaves?: number;
+    basin?: boolean;
+    basinRadius?: number;
+    basinFloor?: number;
+    rimHeight?: number;
+    rimFalloff?: number;
+  };
   /** River flow direction (XY) and speed — used by the flow-scroll shader. */
   flow?: { dir: [number, number]; speed: number };
   /** Stylized render mode (cartoon / ink wash). */
