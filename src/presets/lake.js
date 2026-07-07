@@ -9,17 +9,21 @@ export const lake = {
   waterType: 'lake',
   patch: { width: 80, length: 80, cells: 96, shape: 'circle', segments: 96 },
   terrain: {
-    size: 400,
-    resolution: 160,
-    amplitude: 9,
-    frequency: 0.035,
-    octaves: 4,
+    size: 800,
+    resolution: 220,
+    amplitude: 11,
+    frequency: 0.028,
+    octaves: 5,
     basin: true,
-    basinRadius: 38,        // slightly inside patch radius (40) so water laps the shore
+    basinRadius: 40,        // matches the patch radius so water laps the shore
     basinFloor: -6,         // lake-bed depth, meters below water
-    rimHeight: 12,          // surrounding hills rise above the water
-    rimFalloff: 1.5,
+    rimHeight: 22,          // surrounding hills rise well above the water
+    rimFalloff: 1.2,        // steep rise → reads as a mountain valley
   },
+  // Valley fog: dense + cool-tinted so the terrain edge (~400m) hides in haze
+  // and there's no ocean horizon. The lake reads as enclosed by mountains.
+  fog: { color: 0x9aa6b0, density: 0.0032 },
+  scene: { sky: false, cameraFar: 650 },
   seed: 4242,
   waveAmp: 0.18,
   waveSpeed: 0.35,
@@ -46,7 +50,9 @@ export const lake = {
   causticColor: 0x9fd6a4,
   causticStrength: 0.45,
   seafloorDepth: -6,
-  sky: { elevation: 30, azimuth: 70, exposure: 0.42, turbidity: 5, cloudCoverage: 0.18, starsDensity: 0 },
+  // Higher exposure than ocean presets: with the sky dome hidden the scene
+  // loses ambient skylight, so we push exposure up to compensate.
+  sky: { elevation: 42, azimuth: 70, exposure: 1.3, turbidity: 4, cloudCoverage: 0.1, starsDensity: 0 },
   spectrum: {
     lambda: 0.7,
     local: { windSpeed: 2.2, scale: 0.22, swell: 0.06 },

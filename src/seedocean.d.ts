@@ -95,7 +95,26 @@ export interface Preset {
     basinFloor?: number;
     rimHeight?: number;
     rimFalloff?: number;
+    /** River channel mode: bed along centerline + rising banks (overrides basin). */
+    channel?: boolean;
+    width?: number;
+    bankHeight?: number;
+    bankFalloff?: number;
+    points?: number[][];
   };
+  /** Pool enclosure config (deck/walls/floor colors + dimensions). */
+  pool?: {
+    deckWidth?: number;
+    wallHeight?: number;
+    tileColor?: number;
+    deckColor?: number;
+    wallColor?: number;
+    groutColor?: number;
+  };
+  /** Per-preset above-water fog (bounded water enclosures). */
+  fog?: { color: number; density: number };
+  /** Scene-level switches (sky visibility, camera far plane). */
+  scene?: { sky?: boolean; cameraFar?: number };
   /** River flow direction (XZ) and speed (m/s) — drives flow-scroll shader + buoyancy current. */
   flow?: { dir: [number, number]; speed: number };
   /** River ribbon mesh config (Catmull-Rom centerline + width). */
@@ -349,6 +368,18 @@ export declare function makeFbmHeight(opts?: {
   lacunarity?: number;
 }): (x: number, z: number) => number;
 
+/** River channel height closure: bed along a Catmull-Rom centerline + rising banks. */
+export declare function makeRiverChannelHeight(points: number[][], opts?: {
+  width?: number;
+  bankHeight?: number;
+  bankFalloff?: number;
+  bedDepth?: number;
+  seed?: number;
+  amplitude?: number;
+  frequency?: number;
+  octaves?: number;
+}): (x: number, z: number) => number;
+
 export declare function buildTerrain(opts?: {
   size?: number;
   resolution?: number;
@@ -357,6 +388,11 @@ export declare function buildTerrain(opts?: {
   sunDir?: { value: THREE.Vector3 };
   seed?: number;
 }): TerrainHandle;
+
+export declare function buildPoolScene(
+  preset?: Preset,
+  sunDir?: { value: THREE.Vector3 },
+): SeafloorHandle;
 
 /** Default gently-meandering river centerline. */
 export declare function defaultRiverCenterline(length?: number, meander?: number): number[][];

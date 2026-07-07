@@ -12,29 +12,38 @@ export const river = {
   // appear to move with the current; buoyancy bodies are pushed downstream by
   // BuoyancySystem.current.
   flow: { dir: [1, 0.25], speed: 2.5 },
-  // Ribbon mesh — gently meandering centerline, ~14m wide, ~160m long.
+  // Ribbon mesh — gently meandering centerline, ~14m wide, ~200m long.
   river: {
     width: 14,
-    length: 180,
-    meander: 14,
-    lengthSegs: 160,
+    length: 200,
+    meander: 16,
+    lengthSegs: 180,
     crossSegs: 20,
+    // Explicit centerline so the terrain channel (below) and the ribbon mesh
+    // share an IDENTICAL Catmull-Rom curve — the river bed then sits exactly
+    // under the water surface. These are defaultRiverCenterline(200,16).
+    points: [[-100, 0], [-75, 12.17], [-50, 15.8], [-25, 8.36], [0, -4.94], [25, -14.78], [50, -14.26], [75, -3.74], [100, 9.4]],
   },
-  // Terrain as river banks. Basin mode carves a channel: deep in the ribbon's
-  // path, rising to hills on either side. We size the basin to roughly the
-  // ribbon width so the water meets the banks.
+  // Terrain as river banks via channel mode: the heightFn builds its own
+  // Catmull-Rom curve from river.points (the terrain.points fallback reads
+  // preset.river.points), so the bed sits directly under the ribbon and banks
+  // rise steeply on each side into a gorge.
   terrain: {
-    size: 400,
-    resolution: 180,
-    amplitude: 7,
-    frequency: 0.045,
-    octaves: 4,
-    basin: true,
-    basinRadius: 9,         // ~half the ribbon width
+    size: 700,
+    resolution: 240,
+    channel: true,
+    width: 14,              // matches river.width so banks meet the ribbon edges
+    bankHeight: 20,         // gorge walls rise well above the camera
+    bankFalloff: 60,        // steep climb then plateau into forested hills
     basinFloor: -4,         // river-bed depth
-    rimHeight: 9,           // banks rise above the water
-    rimFalloff: 2.0,
+    amplitude: 10,
+    frequency: 0.03,
+    octaves: 5,
   },
+  // Gorge fog: dense + earthy so the terrain edge (~350m) hides in haze and
+  // there's no ocean horizon. The river reads as enclosed by valley walls.
+  fog: { color: 0x8a9484, density: 0.0035 },
+  scene: { sky: false, cameraFar: 650 },
   seed: 707,
   waveAmp: 0.12,
   waveSpeed: 0.45,
@@ -60,7 +69,9 @@ export const river = {
   causticColor: 0xb0c084,
   causticStrength: 0.35,
   seafloorDepth: -4,
-  sky: { elevation: 32, azimuth: 75, exposure: 0.46, turbidity: 6, cloudCoverage: 0.22, starsDensity: 0 },
+  // Higher exposure than ocean presets: with the sky dome hidden the scene
+  // loses ambient skylight, so we push exposure up to compensate.
+  sky: { elevation: 42, azimuth: 75, exposure: 1.3, turbidity: 5, cloudCoverage: 0.14, starsDensity: 0 },
   spectrum: {
     lambda: 0.7,
     local: { windSpeed: 1.8, scale: 0.18, swell: 0.04 },

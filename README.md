@@ -41,7 +41,7 @@ Persistent foam · 10 sea-state presets · buoyancy · underwater · spray & rai
   </tr>
 </table>
 
-> **Status: `v0.7.1-alpha`.** Fourteen of nineteen presets above — realistic day/night/tropical/polar/bioluminescent, cel-shaded **Cartoon** and **Ink Wash** stylized modes, and three bounded water forms: a rectangular **Pool**, a circular **Mountain Lake** in a procedural fBm terrain basin, and a meandering **River** with directional flow (cascade-UV scroll + current force on buoyant bodies). FFT ocean with persistent/advected foam, a 256² quality mode, TypeScript types, a `<water-canvas>` web component, atmospheric spray + rain, a procedural star field, and a WebGL2/Gerstner fallback that keeps the API identical when WebGPU is unavailable.
+> **Status: `v0.7.1-alpha`.** Fourteen of nineteen presets above — realistic day/night/tropical/polar/bioluminescent, cel-shaded **Cartoon** and **Ink Wash** stylized modes, and three bounded water types each in their own self-contained scene (not floating in an ocean): a tiled **Pool** enclosure, a **Mountain Lake** ringed by procedural fBm valley terrain, and a meandering **River** in a Catmull-Rom gorge with directional flow. FFT ocean with persistent/advected foam, a 256² quality mode, TypeScript types, a `<water-canvas>` web component, atmospheric spray + rain, a procedural star field, and a WebGL2/Gerstner fallback that keeps the API identical when WebGPU is unavailable.
 
 ## Live demo
 
@@ -161,8 +161,9 @@ pnpm capture        # regenerate docs/assets screenshots + GIF
 | 6 ✅ | GitHub Pages, npm API, CI |
 | 7 ✅ | v0.6/v0.7 — 17 presets + star field + cel mode + bounded pool water, quality mode, persistent foam, TS types, web component, spray/rain, WebGL2 fallback |
 | 8 🔨 | v0.7.1 — fBm terrain subsystem (`buildTerrain`) + Mountain Lake preset (circular water in a procedural basin) |
-| 9 ✅ | v0.7.1 — River preset: directional flow (cascade-UV scroll shader) + Catmull-Rom ribbon mesh + buoyancy current force *(current)* |
-| 10 🔜 | Shoreline editor / flowmap painter |
+| 9 ✅ | v0.7.1 — River preset: directional flow (cascade-UV scroll shader) + Catmull-Rom ribbon mesh + buoyancy current force |
+| 10 ✅ | v0.7.1 — Bounded-water scene enclosures: pool deck/walls/tiles, lake mountain valley, river gorge + per-preset fog/sky so bounded water no longer floats in an ocean *(current)* |
+| 11 🔜 | Shoreline editor / flowmap painter |
 
 ## Layout
 

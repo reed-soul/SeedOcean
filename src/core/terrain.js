@@ -114,6 +114,64 @@ function makeBasinFn(inner, {
 }
 
 /**
+ * River channel height: a bed (bedDepth) within `width/2` of the centerline,
+ * banks rising to bankHeight over bankFalloff meters on each side, with fBm
+ * relief so the banks read as natural terrain. Used for the `river` waterType
+ * so the ribbon mesh sits in a real valley instead of a circular basin (which
+ * only matched the river near its midpoint).
+ *
+ * The centerline is sampled from a Catmull-Rom curve built from `points`
+ * (same waypoints the river ribbon mesh uses). Distance-to-centerline is
+ * computed by sampling the curve at fixed steps — coarse but adequate for
+ * displacement; the mesh resolution carries visual detail.
+ */
+export function makeRiverChannelHeight(points, {
+  width = 14,
+  bankHeight = 14,
+  bankFalloff = 40,
+  bedDepth = -4,
+  seed = 1,
+  amplitude = 9,
+  frequency = 0.03,
+  octaves = 4,
+} = {}) {
+  const curvePts = points.map(([x, z]) => new THREE.Vector3(x, 0, z));
+  const curve = new THREE.CatmullRomCurve3(curvePts, false, 'catmullrom', 0.5);
+  // Pre-sample the centerline for fast nearest-point distance queries.
+  const N = 400;
+  /** @type {number[][]} [x,z] */
+  const samples = [];
+  const tmp = new THREE.Vector3();
+  for (let i = 0; i <= N; i++) {
+    curve.getPoint(i / N, tmp);
+    samples.push([tmp.x, tmp.z]);
+  }
+  const halfW = width / 2;
+  const relief = makeFbmHeight({ seed, amplitude, frequency, octaves });
+
+  /** @param {number} x @param {number} z */
+  return function channelAt(x, z) {
+    // nearest point on the sampled centerline (linear scan; N=400 is fine on CPU)
+    let best = Infinity;
+    for (let i = 0; i < samples.length; i++) {
+      const dx = samples[i][0] - x;
+      const dz = samples[i][1] - z;
+      const d = dx * dx + dz * dz;
+      if (d < best) best = d;
+    }
+    const d = Math.sqrt(best);
+    const r = relief(x, z);
+    if (d < halfW) {
+      // river bed: near bedDepth, gentle relief so the underwater floor is calm
+      return bedDepth + r * 0.12;
+    }
+    // banks: smoothstep from waterline (d=halfW) up to bankHeight (d=halfW+falloff)
+    const t = THREE.MathUtils.smoothstep(d, halfW, halfW + bankFalloff);
+    return bedDepth * (1 - t) + (bankHeight + r * 0.7) * t;
+  };
+}
+
+/**
  * @param {object} opts
  * @param {number} [opts.size=400]                 square world extent, meters
  * @param {number} [opts.resolution=128]           subdivisions per side
@@ -135,21 +193,39 @@ export function buildTerrain({
   // so callers can also pass a custom sampler (e.g. a basin-shaped function).
   // When terrain.basin is set we wrap the fBm in a bowl profile so the patch
   // sits in a lake basin: flat-ish at the center, rising toward the rim.
+  // When terrain.channel is set we wrap it in a river-channel profile instead
+  // (bed along a Catmull-Rom centerline, banks rising on each side).
   const baseFn = heightFn ?? makeFbmHeight({
     seed: seed ?? preset.seed ?? 1,
     amplitude: terrainCfg.amplitude ?? 8,
     frequency: terrainCfg.frequency ?? 0.04,
     octaves: terrainCfg.octaves ?? 4,
   });
-  const hFn = terrainCfg.basin
-    ? makeBasinFn(baseFn, {
-        size,
-        basinRadius: terrainCfg.basinRadius ?? Math.min(preset.patch?.width ?? 60, preset.patch?.length ?? 60) / 2,
-        basinFloor: terrainCfg.basinFloor ?? (preset.seafloorDepth ?? -6),
-        rimHeight: terrainCfg.rimHeight ?? (terrainCfg.amplitude ?? 8),
-        rimFalloff: terrainCfg.rimFalloff ?? 1.5,
-      })
-    : baseFn;
+  let hFn;
+  if (terrainCfg.channel) {
+    const river = preset.river ?? {};
+    const points = terrainCfg.points ?? river.points ?? [[-80, 0], [0, 0], [80, 0]];
+    hFn = makeRiverChannelHeight(points, {
+      width: terrainCfg.width ?? river.width ?? 14,
+      bankHeight: terrainCfg.bankHeight ?? terrainCfg.rimHeight ?? 16,
+      bankFalloff: terrainCfg.bankFalloff ?? 50,
+      bedDepth: terrainCfg.basinFloor ?? preset.seafloorDepth ?? -4,
+      seed: seed ?? preset.seed ?? 1,
+      amplitude: terrainCfg.amplitude ?? 9,
+      frequency: terrainCfg.frequency ?? 0.03,
+      octaves: terrainCfg.octaves ?? 4,
+    });
+  } else if (terrainCfg.basin) {
+    hFn = makeBasinFn(baseFn, {
+      size,
+      basinRadius: terrainCfg.basinRadius ?? Math.min(preset.patch?.width ?? 60, preset.patch?.length ?? 60) / 2,
+      basinFloor: terrainCfg.basinFloor ?? (preset.seafloorDepth ?? -6),
+      rimHeight: terrainCfg.rimHeight ?? (terrainCfg.amplitude ?? 8),
+      rimFalloff: terrainCfg.rimFalloff ?? 1.5,
+    });
+  } else {
+    hFn = baseFn;
+  }
 
   // ---- Mesh: PlaneGeometry rotated to XZ, vertices displaced by hFn ----
   const geometry = new THREE.PlaneGeometry(size, size, resolution, resolution);

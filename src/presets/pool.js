@@ -1,9 +1,17 @@
 export const pool = {
   id: 'pool',
   name: 'Swimming Pool',
-  description: 'Still turquoise pool water with a tiled floor.',
+  description: 'Still turquoise pool water in a tiled enclosure.',
   waterType: 'pool',
   patch: { width: 25, length: 25, cells: 48 },
+  pool: {
+    deckWidth: 6,
+    wallHeight: 4.5,
+    tileColor: 0x2a8a98,
+    deckColor: 0xdedede,
+    wallColor: 0x9a9a96,
+    groutColor: 0x1a3a44,
+  },
   seed: 11,
   waveAmp: 0.12,
   waveSpeed: 0.4,
@@ -28,7 +36,11 @@ export const pool = {
   causticColor: 0xaaffff,
   causticStrength: 0.85,
   seafloorDepth: -4,
-  sky: { elevation: 38, azimuth: 90, exposure: 0.5, turbidity: 3, cloudCoverage: 0.02, starsDensity: 0 },
+  // Indoor-pool haze: warm-tinted, light enough to read the pool clearly but
+  // dense enough that the far wall fades into atmosphere (no ocean horizon).
+  fog: { color: 0xc4cdc6, density: 0.005 },
+  scene: { sky: false, cameraFar: 150 },
+  sky: { elevation: 45, azimuth: 90, exposure: 0.85, turbidity: 3, cloudCoverage: 0.02, starsDensity: 0 },
   spectrum: {
     lambda: 0.6,
     local: { windSpeed: 1.5, scale: 0.15, swell: 0.05 },
