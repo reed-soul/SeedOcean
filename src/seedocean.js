@@ -295,15 +295,126 @@ export class SeedOcean {
   }
 
   async applyPreset(idOrPreset, nextState) {
-    this.preset = typeof idOrPreset === 'string' ? PRESETS[idOrPreset] : idOrPreset;
+    const nextPreset = typeof idOrPreset === 'string' ? PRESETS[idOrPreset] : idOrPreset;
+    const prevType = this.preset?.waterType ?? 'ocean';
+    const nextType = nextPreset.waterType ?? 'ocean';
+    this.preset = nextPreset;
     if (nextState) Object.assign(this.state, nextState);
     else Object.assign(this.state, stateFromPreset(this.preset));
+
+    // waterType change requires rebuilding the scene graph (ocean mesh type,
+    // seafloor/terrain/pool enclosure, sky/fog, demo objects). Shader-only
+    // applyPreset can't swap a clipmap for a patch or materialize pool walls.
+    if (prevType !== nextType) {
+      await this._rebuildForWaterType();
+      return;
+    }
     await this.ocean.applyPreset(this.preset, this.state);
     this.underwater?.setPreset(this.preset);
     this.atmosphere?.applyPreset(this.preset);
     this.applyLiveTuning();
     this.syncSky();
     this._applyCurrent();
+    this._applySceneBackdrop();
+  }
+
+  /**
+   * Rebuild the water-type-dependent scene graph when applyPreset crosses a
+   * waterType boundary (e.g. coastal → pool). Tears down the old ocean mesh,
+   * seafloor/terrain/pool enclosure, and demo objects, then rebuilds them for
+   * the new preset. Environment/underwater/atmosphere are kept and refreshed.
+   */
+  async _rebuildForWaterType() {
+    const opts = this.options;
+
+    // --- Tear down water-type-specific scene graph ---
+    if (this.ocean) {
+      this.scene.remove(this.ocean.root);
+      this.ocean = null;
+    }
+    if (this.seafloor) {
+      this.scene.remove(this.seafloor.mesh);
+      this.seafloor = null;
+    }
+    this._removeDemoObjects();
+
+    // --- Rebuild ocean (correct mesh type for the new waterType) ---
+    if (this.isWebGPU) {
+      this.ocean = await buildFFTOcean(this.renderer, this.preset, this.state, this.quality);
+    } else {
+      this.ocean = await buildGerstnerOcean(this.renderer, this.preset, this.state);
+    }
+    this.scene.add(this.ocean.root);
+    this.ocean.updateClipmap(this.camera);
+
+    // --- Rebuild seafloor / terrain / pool enclosure ---
+    const waterType = this.preset.waterType ?? 'ocean';
+    if (waterType === 'lake' || waterType === 'river') {
+      this.seafloor = buildTerrain({
+        preset: this.preset,
+        sunDir: this.ocean.shading.sunDir,
+        size: this.preset.terrain?.size ?? 400,
+        resolution: this.preset.terrain?.resolution ?? 128,
+        seed: this.preset.seed,
+      });
+    } else if (waterType === 'pool') {
+      this.seafloor = buildPoolScene(this.preset, this.ocean.shading.sunDir);
+    } else {
+      this.seafloor = buildSeafloor(this.preset, this.ocean.shading.sunDir);
+    }
+    this.scene.add(this.seafloor.mesh);
+
+    // --- Rebuild buoyancy sampler against the new simulator ---
+    if (this.isWebGPU && opts.buoyancy !== false) {
+      this.buoyancy = new BuoyancySampler(this.ocean.simulator, 3);
+      this.buoyancySystem = new BuoyancySystem(this.buoyancy);
+    }
+
+    // --- Rebuild demo objects (guarded by waterType) ---
+    if (opts.demoObjects) this._buildDemoObjects();
+
+    // --- Refresh sky / fog / background / camera far for the new scene ---
+    this._applySceneBackdrop();
+    this.underwater?.setPreset(this.preset);
+    this.atmosphere?.applyPreset(this.preset);
+    this.applyLiveTuning();
+    this.syncSky();
+    this._applyCurrent();
+    this.ocean.evolve(0, 1 / 60, this.state.waveSpeed);
+  }
+
+  /**
+   * Apply preset-driven scene backdrop: sky visibility, fog color/density,
+   * background color, and camera far plane. Called on init + every preset
+   * switch so the enclosure matches the water type.
+   */
+  _applySceneBackdrop() {
+    if (!this.env) return;
+    const waterType = this.preset.waterType ?? 'ocean';
+    const isBounded = waterType === 'pool' || waterType === 'lake' || waterType === 'river';
+    const skyOn = this.preset.scene?.sky ?? !isBounded;
+    this.env.sky.visible = skyOn;
+    if (skyOn) {
+      this.scene.background = null;
+    } else {
+      const fogColor = this.preset.fog?.color ?? ABOVE_FOG.color;
+      this.scene.background = new THREE.Color(fogColor);
+    }
+    // Camera far plane: bounded water uses a tighter far so distant geometry
+    // doesn't read as an ocean horizon.
+    if (this._ownsCamera) {
+      this.camera.far = this.preset.scene?.cameraFar ?? (isBounded ? 700 : 6000);
+      this.camera.updateProjectionMatrix();
+    }
+  }
+
+  /** Remove boat/buoy/crates added by _buildDemoObjects (for scene rebuild). */
+  _removeDemoObjects() {
+    const scene = this.scene;
+    const drop = (obj) => { if (obj) { scene.remove(obj); this.buoyancySystem?.bodies?.splice(0); } };
+    if (this.boat) { scene.remove(this.boat); this.boat = null; }
+    if (this.buoy) { scene.remove(this.buoy); this.buoy = null; }
+    if (this.crates) { this.crates.forEach((c) => scene.remove(c)); this.crates = null; }
   }
 
   /** Push preset.flow into the buoyancy system as the global current. */
