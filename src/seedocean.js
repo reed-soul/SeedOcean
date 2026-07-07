@@ -10,6 +10,7 @@ import { exportFFTOceanGLB } from './core/export-glb.js';
 import { BuoyancySampler } from './core/buoyancy.js';
 import { BuoyancySystem, BuoyancyBody } from './core/buoyancy-body.js';
 import { buildSeafloor } from './core/seafloor.js';
+import { buildTerrain } from './core/terrain.js';
 import { buildBoat } from './core/boat.js';
 import { buildAtmosphere } from './core/atmosphere.js';
 import { createSubmergedMaterial } from './core/submerged-material.js';
@@ -128,7 +129,20 @@ export class SeedOcean {
     this.submergedMix = uniform(0);
 
     if (opts.seafloor !== false) {
-      this.seafloor = buildSeafloor(this.preset, this.ocean.shading.sunDir);
+      // Bounded water (lake/river) gets displaced terrain as its basin/banks;
+      // open water keeps the flat seafloor. Both expose the same handle shape
+      // ({ mesh, updateUnderwater }) so update()/applyFogBlend are agnostic.
+      const waterType = this.preset.waterType ?? 'ocean';
+      if (waterType === 'lake' || waterType === 'river') {
+        this.seafloor = buildTerrain({
+          preset: this.preset,
+          sunDir: this.ocean.shading.sunDir,
+          size: this.preset.terrain?.size ?? 400,
+          resolution: this.preset.terrain?.resolution ?? 128,
+        });
+      } else {
+        this.seafloor = buildSeafloor(this.preset, this.ocean.shading.sunDir);
+      }
       this.scene.add(this.seafloor.mesh);
     }
 

@@ -79,6 +79,18 @@ export interface Preset {
   /** Future-proofing for stages not yet on every preset. */
   rainIntensity?: number;
   sprayIntensity?: number;
+  /** Water mesh type — selects clipmap vs bounded patch vs terrain basin. */
+  waterType?: 'ocean' | 'pool' | 'lake' | 'river';
+  /** Bounded-water patch dimensions (pool/lake). */
+  patch?: { width: number; length: number; cells: number };
+  /** Terrain basin config (lake/river) — passed to buildTerrain. */
+  terrain?: { size?: number; resolution?: number; amplitude?: number; frequency?: number; octaves?: number };
+  /** River flow direction (XY) and speed — used by the flow-scroll shader. */
+  flow?: { dir: [number, number]; speed: number };
+  /** Stylized render mode (cartoon / ink wash). */
+  renderMode?: 'stylized';
+  celBands?: number;
+  starsDensity?: number;
 }
 
 /** Live-tunable subset of a preset (mirrors `stateFromPreset`). */
@@ -155,7 +167,7 @@ export declare class SeedOcean {
   readonly state: OceanState;
   readonly ocean: FFTOceanHandle;
   readonly env?: EnvironmentHandle;
-  readonly seafloor?: SeafloorHandle;
+  readonly seafloor?: SeafloorHandle | TerrainHandle;
   readonly buoyancy?: BuoyancySampler;
   readonly buoyancySystem?: BuoyancySystem;
   readonly underwater?: UnderwaterHandle;
@@ -222,6 +234,12 @@ export interface EnvironmentHandle {
 export interface SeafloorHandle {
   mesh: THREE.Mesh;
   updateUnderwater: (mix: number) => void;
+}
+
+/** Displaced terrain basin returned by {@link buildTerrain} (lake/river). */
+export interface TerrainHandle extends SeafloorHandle {
+  /** CPU-side height query at world XZ, clamped to the terrain square. */
+  getHeight: (x: number, z: number) => number;
 }
 
 export interface UnderwaterHandle {
@@ -296,6 +314,25 @@ export declare function createUnderwaterPipeline(
 ): UnderwaterHandle;
 
 export declare function buildSeafloor(preset: Preset, sunDirUniform?: { value: THREE.Vector3 }): SeafloorHandle;
+
+/** Fractal-Brownian-motion height closure for procedural terrain. */
+export declare function makeFbmHeight(opts?: {
+  seed?: number;
+  amplitude?: number;
+  frequency?: number;
+  octaves?: number;
+  persistence?: number;
+  lacunarity?: number;
+}): (x: number, z: number) => number;
+
+export declare function buildTerrain(opts?: {
+  size?: number;
+  resolution?: number;
+  heightFn?: (x: number, z: number) => number;
+  preset?: Preset;
+  sunDir?: { value: THREE.Vector3 };
+  seed?: number;
+}): TerrainHandle;
 
 export declare function exportFFTOceanGLB(
   renderer: THREE.WebGPURenderer,
