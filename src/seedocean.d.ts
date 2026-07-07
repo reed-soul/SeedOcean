@@ -42,8 +42,19 @@ export interface SpectrumParams {
   swell?: SpectrumBand;
 }
 
+/** Schema version tag for serialized presets (`seedocean-preset/1`).
+ * Lets headless round-trip (SeedOceanAPI.toPreset/fromPreset) and future
+ * migrations tag their on-disk format. Absent on legacy presets → normalizePreset
+ * fills it in, so existing data files stay clean. */
+export type PresetFormat = 'seedocean-preset/1';
+
+/** Current preset schema version (the only legal value of Preset.format today). */
+export const PRESET_FORMAT: PresetFormat;
+
 /** A named sea state + look. Calm / storm / etc. are instances of this. */
 export interface Preset {
+  /** Schema version. Optional — normalizePreset fills it in. */
+  format?: PresetFormat;
   id: string;
   name: string;
   description?: string;
@@ -421,11 +432,50 @@ export declare function exportFFTOceanGLB(
 
 export declare function stateFromPreset(preset: Preset): OceanState;
 
+// ----- Headless introspection (src/core/stats.js) — pure CPU, no renderer ----
+
+/** Per-mesh + summary geometry stats for a built THREE.Object3D. */
+export interface GeometryStats {
+  meshes: number;
+  instances: number;
+  triangles: number;
+  verts: number;
+}
+
+/** Estimate for a single JONSWAP band (wind-sea `local` or `swell`). */
+export interface BandStats {
+  peakWavelength: number;
+  peakPeriod: number;
+  significantHeight: number;
+  alpha: number;
+  peakOmega: number;
+}
+
+/** Combined sea-state estimate from a full spectrumParams object. */
+export interface SpectrumStats {
+  local: BandStats;
+  swell: BandStats;
+  significantHeight: number;
+  dominantPeakWavelength: number;
+  dominantPeakPeriod: number;
+  depth: number;
+  cascades: number;
+  gridN: number;
+  lengthScales: number[];
+}
+
+export declare function statsOf(object: THREE.Object3D): GeometryStats;
+export declare function bandStats(band: SpectrumBand, g?: number): BandStats;
+export declare function spectrumStats(params: SpectrumParams & { g?: number }): SpectrumStats;
+
 // ----- Registry -----
 
 export declare const PRESETS: Record<string, Preset>;
 export declare const DEFAULT_PRESET: string;
 export declare const PRESET_LIST: Preset[];
+
+/** Stamp the preset schema version onto a preset (immutably). */
+export declare function normalizePreset(preset: Preset): Preset;
 
 // ----- Web component (side-effect import registers <water-canvas>) -----
 
@@ -441,4 +491,79 @@ declare global {
   interface HTMLElementTagNameMap {
     'water-canvas': SeedOceanCanvas;
   }
+}
+
+// ----- Headless Design API (src/api/seedocean.js) ---------------------------
+// Two-tier programmatic surface: design tier runs with no GPU (Node/Deno),
+// live tier hands off to SeedOcean.create. See src/api/README.md.
+
+/** One row from listPresets(). */
+export interface PresetListItem {
+  key: string;
+  name: string;
+  description: string | null;
+  waterType: NonNullable<Preset['waterType']>;
+  generator: 'fft-jonswap';
+  seed: number;
+}
+
+/** One editable knob, as data (from getSchema). */
+export interface SchemaEntry {
+  key: string;
+  name: string;
+  group?: string;
+  type?: 'color' | 'bool';
+  min?: number;
+  max?: number;
+  step?: number;
+  default: number | string;
+}
+
+/** Result of getSchema(): knobs grouped into folders. */
+export interface PresetSchema {
+  preset: string;
+  name: string;
+  waterType: NonNullable<Preset['waterType']>;
+  folders: Record<string, SchemaEntry[]>;
+}
+
+/** Result of design(): sea-state + geometry + terrain budget, no renderer. */
+export interface DesignResult {
+  preset: Preset;
+  state: OceanState;
+  spectrumParams: SpectrumParams;
+  seaState: SpectrumStats;
+  stats: GeometryStats;
+  terrain: { minHeight: number; maxHeight: number; sampleCount: number } | null;
+}
+
+/** Serialized preset envelope (seedocean-preset/1). */
+export interface PresetEnvelope {
+  format: PresetFormat;
+  preset: Preset;
+}
+
+/** Headless design + live-adapter namespace. */
+export declare namespace SeedOceanAPI {
+  export { PRESETS, DEFAULT_PRESET, PRESET_FORMAT, normalizePreset };
+  export function listPresets(): PresetListItem[];
+  export function getSchema(presetRef?: PresetRef): PresetSchema;
+  export function describe(presetRef?: string | null, folder?: string | null): string;
+  export function design(opts?: {
+    preset?: PresetRef;
+    seed?: number;
+    controls?: Partial<OceanState>;
+    quality?: Quality;
+  }): DesignResult;
+  export function toPreset(opts: {
+    preset?: PresetRef;
+    seed?: number;
+    controls?: Partial<OceanState>;
+  }): PresetEnvelope;
+  export function fromPreset(json: PresetEnvelope | Preset): {
+    preset: Preset;
+    seed: number;
+    controls: Partial<OceanState>;
+  };
+  export function createOcean(options?: SeedOceanOptions): Promise<SeedOcean>;
 }

@@ -86,7 +86,7 @@ export function makeFbmHeight({
  * meters. This is what gives the lake its shoreline — the water patch (radius
  * ≈ basinRadius) meets terrain that climbs out of the basin.
  */
-function makeBasinFn(inner, {
+export function makeBasinFn(inner, {
   size,
   basinRadius = 30,
   basinFloor = -6,

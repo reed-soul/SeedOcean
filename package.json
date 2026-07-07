@@ -30,6 +30,10 @@
       "types": "./src/seedocean.d.ts",
       "import": "./src/index.js"
     },
+    "./api": {
+      "types": "./src/seedocean.d.ts",
+      "import": "./src/api/seedocean.js"
+    },
     "./presets": "./src/presets/index.js",
     "./web-component": "./src/web-component.js"
   },
