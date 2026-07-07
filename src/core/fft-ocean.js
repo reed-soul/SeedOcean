@@ -8,6 +8,7 @@ import { createFFTSurfaceMaterial, createShadingUniforms, applyShadingUniforms }
 import { buildSpectrumParams } from './fft/defaults.js';
 import { buildClipmapMesh } from './clipmap.js';
 import { buildPatchMesh } from './water-patch.js';
+import { buildRiverMesh, defaultRiverCenterline } from './river-mesh.js';
 
 /**
  * @param {import('three/webgpu').WebGPURenderer} renderer
@@ -44,9 +45,17 @@ export async function buildFFTOcean(renderer, preset, state, quality = 'perf') {
     surface = buildPatchMesh(material, { ...patchDefaults, ...(preset.patch ?? {}) });
     // Bounded water: clipOrigin stays at (0,0); patch vertices are local-to-origin.
   } else if (waterType === 'river') {
-    // River ribbon mesh is built later (Stage 7); for now route through patch
-    // so applyPreset/applyLiveTuning stay consistent during handoff.
-    surface = buildPatchMesh(material, preset.patch ?? { width: 20, length: 120, cells: 64 });
+    // Ribbon mesh extruded along a Catmull-Rom centerline. The surface shader
+    // is unchanged — flow is achieved by scrolling the cascade UVs by
+    // flowDir*flowSpeed*time, set in applyShadingUniforms from preset.flow.
+    const river = preset.river ?? {};
+    const points = river.points ?? defaultRiverCenterline(river.length ?? 160, river.meander ?? 12);
+    surface = buildRiverMesh(material, {
+      points,
+      width: river.width ?? 14,
+      lengthSegs: river.lengthSegs ?? 128,
+      crossSegs: river.crossSegs ?? 16,
+    });
   } else {
     surface = buildClipmapMesh(material, { patchHalf: 56, levels: 4, cells: 32 });
   }

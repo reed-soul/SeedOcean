@@ -150,6 +150,7 @@ export class SeedOcean {
     if (this.isWebGPU && opts.buoyancy !== false) {
       this.buoyancy = new BuoyancySampler(this.ocean.simulator, 3);
       this.buoyancySystem = new BuoyancySystem(this.buoyancy);
+      this._applyCurrent();
     } else if (opts.buoyancy !== false) {
       // Fallback: analytical Gerstner sampler (no GPU readback).
       this.buoyancy = { getHeight: (x, z) => this.ocean.getHeight(x, z), getSlope: () => ({ dx: 0, dz: 0 }), requestReadback: () => null, underwaterMix: (camY, x, z) => {
@@ -157,6 +158,7 @@ export class SeedOcean {
         return Math.min(1, Math.max(0, (s - camY + 0.25) / 1.2));
       } };
       this.buoyancySystem = new BuoyancySystem(this.buoyancy);
+      this._applyCurrent();
     }
 
     if (opts.demoObjects) {
@@ -257,6 +259,15 @@ export class SeedOcean {
     this.atmosphere?.applyPreset(this.preset);
     this.applyLiveTuning();
     this.syncSky();
+    this._applyCurrent();
+  }
+
+  /** Push preset.flow into the buoyancy system as the global current. */
+  _applyCurrent() {
+    if (!this.buoyancySystem) return;
+    const flow = this.preset?.flow;
+    if (flow) this.buoyancySystem.setCurrent(flow.dir[0], flow.dir[1], flow.speed);
+    else this.buoyancySystem.setCurrent(0, 0, 0);
   }
 
   applyLiveTuning() {

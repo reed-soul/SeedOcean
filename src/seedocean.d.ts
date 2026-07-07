@@ -96,8 +96,18 @@ export interface Preset {
     rimHeight?: number;
     rimFalloff?: number;
   };
-  /** River flow direction (XY) and speed — used by the flow-scroll shader. */
+  /** River flow direction (XZ) and speed (m/s) — drives flow-scroll shader + buoyancy current. */
   flow?: { dir: [number, number]; speed: number };
+  /** River ribbon mesh config (Catmull-Rom centerline + width). */
+  river?: {
+    points?: number[][];
+    width?: number;
+    length?: number;
+    meander?: number;
+    lengthSegs?: number;
+    crossSegs?: number;
+    closed?: boolean;
+  };
   /** Stylized render mode (cartoon / ink wash). */
   renderMode?: 'stylized';
   celBands?: number;
@@ -275,6 +285,7 @@ export declare class BuoyancyBody {
     springK?: number;
     damping?: number;
     maxTilt?: number;
+    currentDrag?: number;
   });
   sampleVelocity(dt: number): THREE.Vector3;
 }
@@ -283,6 +294,8 @@ export declare class BuoyancySystem {
   constructor(sampler: BuoyancySampler);
   add(body: BuoyancyBody): void;
   getBody(object: THREE.Object3D): BuoyancyBody | undefined;
+  /** Set global river current — dir (unit XZ) and speed (m/s). */
+  setCurrent(dirX: number, dirZ: number, speed: number): void;
   update(dt: number): void;
 }
 
@@ -344,6 +357,23 @@ export declare function buildTerrain(opts?: {
   sunDir?: { value: THREE.Vector3 };
   seed?: number;
 }): TerrainHandle;
+
+/** Default gently-meandering river centerline. */
+export declare function defaultRiverCenterline(length?: number, meander?: number): number[][];
+
+export declare function buildRiverMesh(material: THREE.Material, opts?: {
+  points?: number[][];
+  width?: number;
+  lengthSegs?: number;
+  crossSegs?: number;
+  closed?: boolean;
+}): {
+  root: THREE.Object3D;
+  mesh: THREE.Mesh;
+  snap: number;
+  extent: number;
+  update: (camera: THREE.Camera) => void;
+};
 
 export declare function exportFFTOceanGLB(
   renderer: THREE.WebGPURenderer,

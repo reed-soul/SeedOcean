@@ -28,7 +28,15 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading, wakeFi
   // worldXZ — so worldXZ must not itself depend on the displaced position.
   // clipOrigin supplies the world offset (clipmap snaps it to camera; finite
   // patches leave it at their mesh origin).
+  //
+  // River flow: subtract a time-varying offset so the FFT waves (which are
+  // spatially periodic with zero net drift) appear to scroll downstream. The
+  // offset is in *cascade-length-normalized* UV space, so we apply it per
+  // cascade below rather than here. The un-flowed worldXZ is kept for wake /
+  // detail / caustic sampling (those shouldn't drift).
   const worldXZ = positionLocal.xz.add(shading.clipOrigin);
+  // Per-frame flow offset in world meters = flowDir (unit) * flowSpeed * t.
+  const flowOffset = shading.flowDir.mul(shading.flowSpeed).mul(time);
 
   const wakeTex = wakeField ? texture(wakeField.texture) : null;
   const wakeExtent = uniform(wakeField?.worldExtent ?? 220);
@@ -38,7 +46,10 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading, wakeFi
   mat.positionNode = Fn(() => {
     const disp = vec3(0).toVar();
     cascades.forEach((c, i) => {
-      disp.addAssign(texture(c.displacement, worldXZ.div(lengthScales[i])).xyz);
+      // Flow: scroll the sample upstream so waves appear to move downstream.
+      // Offset is scaled into each cascade's UV space (worldXZ / lengthScale).
+      const uv = worldXZ.div(lengthScales[i]).sub(flowOffset.div(lengthScales[i]));
+      disp.addAssign(texture(c.displacement, uv).xyz);
     });
     if (wakeTex) {
       const wakeUV = fract(worldXZ.div(wakeExtent));
@@ -51,7 +62,8 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading, wakeFi
   const normalFromMaps = Fn(() => {
     const d = vec4(0).toVar();
     cascades.forEach((c, i) => {
-      d.addAssign(texture(c.derivatives, worldXZ.div(lengthScales[i])));
+      const uv = worldXZ.div(lengthScales[i]).sub(flowOffset.div(lengthScales[i]));
+      d.addAssign(texture(c.derivatives, uv));
     });
     const slopeX = d.x.div(float(1).add(d.z));
     const slopeZ = d.y.div(float(1).add(d.w));
@@ -95,7 +107,9 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading, wakeFi
     const foamRaw = float(0).toVar();
     cascades.forEach((c, i) => {
       // Advected/persistent foam (0..~several). Threshold + scale map it to coverage.
-      const foam = texture(c.foam, worldXZ.div(lengthScales[i])).x;
+      // Flow scroll here too, so foam drifts with the waves + downstream current.
+      const uv = worldXZ.div(lengthScales[i]).sub(flowOffset.div(lengthScales[i]));
+      const foam = texture(c.foam, uv).x;
       foamRaw.addAssign(saturate(foam.sub(shading.foamThreshold).mul(shading.foamScale)));
     });
 
@@ -169,10 +183,24 @@ export function createShadingUniforms(preset) {
     // value is set by applyShadingUniforms on build + every preset switch.
     stylized: uniform(0.001),
     celBands: uniform(preset.celBands ?? 4),
+    // River flow: direction (unit vec2) + speed (m/s). Zero speed disables flow
+    // scrolling (oceans/pools/lakes), so the uniform cost is one mad per cascade.
+    flowDir: uniform(new THREE.Vector2(0, 0)),
+    flowSpeed: uniform(0),
   };
 }
 
 export function applyShadingUniforms(shading, preset, state) {
+  // River flow — read preset.flow (dir + speed), normalize the direction.
+  if (preset.flow) {
+    const [fx, fz] = preset.flow.dir;
+    const len = Math.hypot(fx, fz) || 1;
+    shading.flowDir.value.set(fx / len, fz / len);
+    shading.flowSpeed.value = preset.flow.speed ?? 0;
+  } else {
+    shading.flowDir.value.set(0, 0);
+    shading.flowSpeed.value = 0;
+  }
   shading.waterColor.value.set(state.waterColor ?? preset.waterColor);
   shading.deepColor.value.set(state.deepColor ?? preset.deepColor);
   shading.scatterColor.value.set(preset.scatterColor ?? 0x2e8f8f);

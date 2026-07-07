@@ -7,6 +7,7 @@ export { BuoyancySystem, BuoyancyBody } from './core/buoyancy-body.js';
 export { createUnderwaterPipeline } from './core/underwater-post.js';
 export { buildSeafloor } from './core/seafloor.js';
 export { buildTerrain, makeFbmHeight } from './core/terrain.js';
+export { buildRiverMesh, defaultRiverCenterline } from './core/river-mesh.js';
 export { exportFFTOceanGLB } from './core/export-glb.js';
 export { stateFromPreset } from './ui/controls.js';
 

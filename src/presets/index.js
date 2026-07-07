@@ -13,6 +13,7 @@ export { cartoon } from './cartoon.js';
 export { ink } from './ink.js';
 export { pool } from './pool.js';
 export { lake } from './lake.js';
+export { river } from './river.js';
 export { gale } from './gale.js';
 export { storm } from './storm.js';
 export { tempest } from './tempest.js';
@@ -32,6 +33,7 @@ import { cartoon } from './cartoon.js';
 import { ink } from './ink.js';
 import { pool } from './pool.js';
 import { lake } from './lake.js';
+import { river } from './river.js';
 import { gale } from './gale.js';
 import { storm } from './storm.js';
 import { tempest } from './tempest.js';
@@ -57,6 +59,7 @@ export const PRESETS = {
   ink,
   pool,
   lake,
+  river,
   gale,
   storm,
   tempest,

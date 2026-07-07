@@ -24,6 +24,9 @@ export class BuoyancyBody {
     this.angularDamping = opts.angularDamping ?? 4;
     this.maxTilt = opts.maxTilt ?? 0.32;
     this.samples = opts.samples ?? DEFAULT_SAMPLES;
+    // Lateral drag coefficient — how strongly the current grips this body.
+    // Higher for wide flat hulls (boat), lower for tall thin posts (buoy).
+    this.currentDrag = opts.currentDrag ?? 1;
     this.velocity = new THREE.Vector3();
     this.angularVelocity = new THREE.Vector2();
     this._prevPos = object.position.clone();
@@ -48,6 +51,9 @@ export class BuoyancySystem {
   constructor(sampler) {
     this.sampler = sampler;
     this.bodies = [];
+    // River current — applied as a horizontal force on every body. Default
+    // (0,0,0) is open water with no drift; preset.flow populates this.
+    this.current = new THREE.Vector3();
   }
 
   add(body) {
@@ -55,8 +61,15 @@ export class BuoyancySystem {
     return body;
   }
 
+  /** Set the global current direction (unit, XZ) and speed (m/s). */
+  setCurrent(dirX, dirZ, speed) {
+    const len = Math.hypot(dirX, dirZ) || 1;
+    this.current.set(dirX / len, 0, dirZ / len).multiplyScalar(speed);
+  }
+
   update(dt) {
     const clampDt = Math.min(dt, 0.05);
+    const hasCurrent = this.current.lengthSq() > 1e-6;
     for (const body of this.bodies) {
       const obj = body.object;
       const cosY = Math.cos(obj.rotation.y);
@@ -74,6 +87,18 @@ export class BuoyancySystem {
       const ay = body.springK * (targetY - obj.position.y) - body.damping * body.velocity.y;
       body.velocity.y += ay * clampDt;
       obj.position.y += body.velocity.y * clampDt;
+
+      // Horizontal current: push the body downstream. We integrate directly on
+      // position (no horizontal momentum state) and damp toward the current
+      // velocity — a simple drag model that reads as "the river carries you"
+      // without needing full rigid-body physics. currentDrag scales grip.
+      if (hasCurrent) {
+        const k = body.currentDrag * clampDt;
+        // Target horizontal velocity = current velocity. Lerp position toward
+        // where the current would carry it this frame.
+        obj.position.x += this.current.x * k;
+        obj.position.z += this.current.z * k;
+      }
 
       const front = heights[3] ?? heights[0];
       const back = heights[4] ?? heights[0];
