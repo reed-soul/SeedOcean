@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 import {
   Fn, positionLocal, positionWorld, cameraPosition, vec2, vec3, vec4, float,
   texture, normalize, dot, max, pow, mix, saturate, smoothstep, uniform, time,
-  screenUV, viewportSafeUV, viewportSharedTexture, reflector, fract,
+  screenUV, viewportSafeUV, viewportSharedTexture, reflector, fract, floor, step,
 } from 'three/tsl';
 import { makeDetailTexture } from './detail-texture.js';
 
