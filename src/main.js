@@ -23,8 +23,14 @@ let seedOcean;
 let controls;
 
 async function init() {
+  // Allow `?preset=ID` to boot straight into a preset (useful for bounded-water
+  // types like pool that need the ocean built with the right mesh from the start).
+  const params = new URLSearchParams(location.search);
+  const initialPreset = params.get('preset') || undefined;
+
   seedOcean = await SeedOcean.create({
     container: app,
+    preset: initialPreset,
     demoObjects: true,
     quality: 'quality',
   });

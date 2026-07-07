@@ -22,6 +22,12 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading, wakeFi
   });
 
   const detailTex = makeDetailTexture();
+  // World-space XZ for texture sampling = local XZ + a mesh-origin offset.
+  // We use positionLocal (not positionWorld) to avoid a circular dependency:
+  // positionNode displaces positionLocal, and displacement is sampled at
+  // worldXZ — so worldXZ must not itself depend on the displaced position.
+  // clipOrigin supplies the world offset (clipmap snaps it to camera; finite
+  // patches leave it at their mesh origin).
   const worldXZ = positionLocal.xz.add(shading.clipOrigin);
 
   const wakeTex = wakeField ? texture(wakeField.texture) : null;
