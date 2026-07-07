@@ -55,7 +55,9 @@ export function buildSpectrumParams(preset, state, quality = 'perf') {
   return {
     ...FFT_DEFAULTS,
     seed: state.seed,
-    lambda: (s.lambda ?? FFT_DEFAULTS.lambda) * (0.7 + amp * 0.3),
+    // Lambda = horizontal chop (Tessendorf). Decouple from waveAmp — stacking both
+    // made storm/tempest crests fold into sharp needles. Cap at 1.52.
+    lambda: Math.min(s.lambda ?? FFT_DEFAULTS.lambda, 1.52),
     foamDecay: s.foamDecay ?? FFT_DEFAULTS.foamDecay,
     // foamPersistence: live-tunable; 0 = instantaneous foam, 1 = foam holds indefinitely.
     foamPersistence: state.foamPersistence

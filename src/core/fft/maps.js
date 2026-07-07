@@ -15,6 +15,10 @@ import {
   texture, textureStore,
 } from 'three/tsl';
 
+// Horizontal displacement scale when Jacobian folds (J < 1). Keeps tall waves
+// rounded instead of pinching into self-intersecting needles at high lambda.
+const chopAttenuation = (J) => max(min(J, float(1)), float(0.42));
+
 function mapTexture(N) {
   const tex = new StorageTexture(N, N);
   tex.type = HalfFloatType;
@@ -50,9 +54,10 @@ export function createCascadeMaps(cascade, { N, lambda, dt, foamDecay }) {
 
     // Breaking source: foam is generated where the flow is compressive (J < 1).
     const breaking = float(1).sub(min(J, float(1)));
+    const lEff = lambda.mul(chopAttenuation(J));
 
-    textureStore(displacement, coord, vec4(DxDz.x.mul(lambda), DyDxz.x, DxDz.y.mul(lambda), breaking)).toWriteOnly();
-    textureStore(derivatives, coord, vec4(DyxDyz.x, DyxDyz.y, DxxDzz.x.mul(lambda), DxxDzz.y.mul(lambda))).toWriteOnly();
+    textureStore(displacement, coord, vec4(DxDz.x.mul(lEff), DyDxz.x, DxDz.y.mul(lEff), breaking)).toWriteOnly();
+    textureStore(derivatives, coord, vec4(DyxDyz.x, DyxDyz.y, DxxDzz.x.mul(lEff), DxxDzz.y.mul(lEff))).toWriteOnly();
   })().compute(N * N);
 
   // Advect: half-Lagrangian back-trace by horizontal displacement, decay, add source.

@@ -119,7 +119,8 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading, wakeFi
     }
 
     // Cartoon foam: hard edge instead of smoothstep.
-    const coverageReal = smoothstep(float(0.2), float(0.9), foamRaw);
+    // Wider ramp — high foamScale on storm presets was snapping crests to hard white spikes.
+    const coverageReal = smoothstep(float(0.12), float(1.05), foamRaw);
     const coverageCel = step(shading.foamThreshold, foamRaw);
     const coverage = mix(coverageReal, coverageCel, shading.stylized);
     const foam = shading.foamColor.mul(float(0.55).add(saturate(dot(N, shading.sunDir)).mul(0.55)));
