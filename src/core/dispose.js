@@ -43,6 +43,7 @@ export function disposeOcean(ocean) {
 
   ocean.detailTex?.dispose?.();
   ocean.wakeField?.texture?.dispose?.();
+  ocean.flowMap?.dispose?.();
 
   const reflector = ocean.reflector;
   if (reflector) {

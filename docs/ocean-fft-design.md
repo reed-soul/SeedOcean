@@ -60,7 +60,19 @@ nested-ring clipmap，相机捕捉（`updateClipmapOrigin` 做 `Math.floor` snap
 
 ### River ribbon（`src/core/river-mesh.js`）—— 河流
 
-Catmull-Rom 样条定义河中线，沿样条挤出 ribbon（左右各 width/2）。方向流通过 shader 内 **滚动采样坐标** 实现（`surface-material.js:39,51` 的 `flowOffset = flowDir · flowSpeed · time`，FFT 频谱本身对称无净流）。
+Catmull-Rom 样条定义河中线，沿样条挤出 ribbon（左右各 width/2）。方向流通过 shader 内 **滚动采样坐标** 实现（`surface-material.js` 的 `flowOffset`）。当绑定 FlowMap 时，每 texel 的 RG 方向 × B 速度缩放替代均匀 `flowDir*flowSpeed`，使弯道切线跟随中心线。
+
+### FlowMap（`src/core/flow-map.js`）—— 空间变化流 + 湿岸泡沫 ✅
+
+`seedocean-flowmap/1` RGBA DataTexture（与 WakeField 同模式）：
+
+| 通道 | 含义 |
+|---|---|
+| R/G | 有符号流向（`(v*0.5+0.5)*255`） |
+| B | 速度缩放 ∈ [0,1]，乘以 preset.flow.speed |
+| A | 湿岸泡沫覆盖 |
+
+烘焙纯 CPU：`bakeRiverFlow`（中心线切线）、`bakeShoreRing`（湖盘边缘）、`bakeShoreChannel`（河岸）。湖/河自动启用；ocean/pool 默认关闭。⚠️ 湖岸泡沫必须按 **水面网格边缘** 烘焙，不能按地形 `h≈0`——盆地在盘下约 −6 m，水位线交叉测试会把整个湖床刷白。
 
 ## Foam —— persistent / advected
 

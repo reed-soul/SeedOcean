@@ -32,10 +32,12 @@ import { buildClipmapMesh } from '../core/clipmap.js';
 import { buildPatchMesh } from '../core/water-patch.js';
 import { buildRiverMesh, defaultRiverCenterline } from '../core/river-mesh.js';
 import { makeFbmHeight, makeBasinFn, makeRiverChannelHeight } from '../core/terrain.js';
+import { bakeFlowMapForPreset } from '../core/flow-map.js';
 import { statsOf, spectrumStats } from '../core/stats.js';
 import { stateFromPreset } from '../state.js';
 
 export { PRESETS, DEFAULT_PRESET, PRESET_FORMAT, normalizePreset, resolvePreset };
+export { bakeFlowMapForPreset, normalizeFlowMapConfig, FLOWMAP_FORMAT, FlowMap } from '../core/flow-map.js';
 
 // ---- preset resolution -----------------------------------------------------
 
@@ -288,6 +290,7 @@ function terrainEnvelope(preset) {
  *   seaState: import('../core/stats.js').SpectrumStats,
  *   stats: import('../core/stats.js').GeometryStats,
  *   terrain: { minHeight: number, maxHeight: number, sampleCount: number } | null,
+ *   flowmap: import('../core/flow-map.js').FlowMapStats | null,
  * }}
  */
 export function design({ preset = DEFAULT_PRESET, seed, controls = {}, quality = 'perf' } = {}) {
@@ -303,6 +306,12 @@ export function design({ preset = DEFAULT_PRESET, seed, controls = {}, quality =
   const surface = buildSurfaceGeometry(base);
   const stats = statsOf(surface.root);
 
+  // FlowMap bake is pure CPU — report coverage so a scene composer can budget
+  // shore foam / river current before spending a renderer.
+  const flowMap = bakeFlowMapForPreset(base);
+  const flowmap = flowMap ? flowMap.stats() : null;
+  flowMap?.dispose();
+
   return {
     preset: base,
     state,
@@ -310,6 +319,7 @@ export function design({ preset = DEFAULT_PRESET, seed, controls = {}, quality =
     seaState,
     stats,
     terrain: terrainEnvelope(base),
+    flowmap,
   };
 }
 

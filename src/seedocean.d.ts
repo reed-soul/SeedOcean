@@ -129,6 +129,25 @@ export interface Preset {
   scene?: { sky?: boolean; cameraFar?: number };
   /** River flow direction (XZ) and speed (m/s) — drives flow-scroll shader + buoyancy current. */
   flow?: { dir: [number, number]; speed: number };
+  /**
+   * Spatially-varying flow + wet-shore foam (`seedocean-flowmap/1`).
+   * Lake/river auto-enable a shore bake when omitted; set `false` to disable.
+   * Ocean/pool stay off unless an explicit block is provided.
+   */
+  flowmap?: false | {
+    /** Texture resolution (default 256). */
+    size?: number;
+    /** World meters covered, centered on origin (default derived from patch/river/terrain). */
+    worldExtent?: number;
+    /** Multiplier on base flow.speed written into the B channel (default 1). */
+    flowStrength?: number;
+    /** Wet-shore foam band. `false` disables; omit for waterType defaults. */
+    shore?: false | {
+      waterLevel?: number;
+      bandWidth?: number;
+      foamStrength?: number;
+    };
+  };
   /** River ribbon mesh config (Catmull-Rom centerline + width). */
   river?: {
     points?: number[][];
@@ -256,6 +275,8 @@ export interface FFTOceanHandle {
   };
   shading: Record<string, THREE.IUniform | { value: unknown }>;
   wakeField: WakeField;
+  /** Spatially-varying flow + shore foam; null for ocean/pool. */
+  flowMap: FlowMap | null;
   spectrumParams: SpectrumParams & Record<string, unknown>;
   applyPreset: (preset: Preset, state: OceanState) => Promise<void>;
   applyLiveTuning: (preset: Preset, state: OceanState) => void;
@@ -341,6 +362,58 @@ export interface WakeField {
   upload(): void;
   dirty?: boolean;
 }
+
+/** Schema tag for FlowMap payloads (`seedocean-flowmap/1`). */
+export type FlowMapFormat = 'seedocean-flowmap/1';
+
+export const FLOWMAP_FORMAT: FlowMapFormat;
+
+/** Coverage stats from a baked FlowMap (Design API / bake introspection). */
+export interface FlowMapStats {
+  size: number;
+  worldExtent: number;
+  shoreCoverage: number;
+  flowCoverage: number;
+  meanShore: number;
+}
+
+/**
+ * CPU-authored RGBA flow + shore field.
+ * R/G = signed flow dir, B = speed scale [0,1], A = shore foam [0,1].
+ */
+export declare class FlowMap {
+  constructor(size?: number, worldExtent?: number);
+  readonly size: number;
+  worldExtent: number;
+  readonly data: Uint8Array;
+  readonly texture: THREE.Texture;
+  clear(): void;
+  bakeUniformFlow(dirX: number, dirZ: number, speedScale?: number): void;
+  bakeRiverFlow(points: number[][], opts?: { width?: number; speedScale?: number; margin?: number }): void;
+  bakeShoreRing(radius: number, opts?: { bandWidth?: number; foamStrength?: number }): void;
+  bakeShoreChannel(points: number[][], opts?: { width?: number; bandWidth?: number; foamStrength?: number }): void;
+  bakeShoreFromHeight(getHeight: (x: number, z: number) => number, opts?: {
+    waterLevel?: number; bandWidth?: number; foamStrength?: number;
+  }): void;
+  paint(x: number, z: number, dirX: number, dirZ: number, speed?: number, shore?: number, radius?: number): void;
+  sample(x: number, z: number): { dirX: number; dirZ: number; speed: number; shore: number };
+  stats(): FlowMapStats;
+  upload(): void;
+  dispose(): void;
+}
+
+export declare function normalizeFlowMapConfig(
+  raw: Preset['flowmap'],
+  preset?: Partial<Preset>,
+): {
+  format: FlowMapFormat;
+  size: number;
+  worldExtent: number;
+  shore: { enabled: boolean; waterLevel: number; bandWidth: number; foamStrength: number } | null;
+  flowStrength: number;
+} | null;
+
+export declare function bakeFlowMapForPreset(preset: Preset): FlowMap | null;
 
 export interface AtmosphereHandle {
   group: THREE.Group;
@@ -531,7 +604,7 @@ export interface PresetSchema {
   folders: Record<string, SchemaEntry[]>;
 }
 
-/** Result of design(): sea-state + geometry + terrain budget, no renderer. */
+/** Result of design(): sea-state + geometry + terrain + flowmap budget, no renderer. */
 export interface DesignResult {
   preset: Preset;
   state: OceanState;
@@ -539,6 +612,8 @@ export interface DesignResult {
   seaState: SpectrumStats;
   stats: GeometryStats;
   terrain: { minHeight: number; maxHeight: number; sampleCount: number } | null;
+  /** FlowMap coverage after bake; null when the preset has no flowmap. */
+  flowmap: FlowMapStats | null;
 }
 
 /** Serialized preset envelope (seedocean-preset/1). */

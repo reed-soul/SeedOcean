@@ -55,6 +55,7 @@
     "build:types": "tsc -p tsconfig.json",
     "preview": "vite preview --port 5391",
     "test:fft": "node scripts/fft-selftest.mjs",
+    "test:api": "node scripts/api-selftest.mjs",
     "capture": "node scripts/capture-media.mjs"
   },
   "peerDependencies": {
