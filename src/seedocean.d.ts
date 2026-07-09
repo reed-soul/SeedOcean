@@ -91,11 +91,11 @@ export interface Preset {
   /** Future-proofing for stages not yet on every preset. */
   rainIntensity?: number;
   sprayIntensity?: number;
-  /** Water mesh type — selects clipmap vs bounded patch vs terrain basin. */
-  waterType?: 'ocean' | 'pool' | 'lake' | 'river';
+  /** Water mesh type — selects clipmap vs bounded patch vs terrain basin / beach. */
+  waterType?: 'ocean' | 'pool' | 'lake' | 'river' | 'coast';
   /** Bounded-water patch dimensions (pool/lake). */
   patch?: { width: number; length: number; cells: number; shape?: 'rect' | 'circle'; segments?: number };
-  /** Terrain basin config (lake/river) — passed to buildTerrain. */
+  /** Terrain basin / channel / beach config — passed to buildTerrain. */
   terrain?: {
     size?: number;
     resolution?: number;
@@ -113,6 +113,14 @@ export interface Preset {
     bankHeight?: number;
     bankFalloff?: number;
     points?: number[][];
+    /** Coastal beach mode: cross-shore slope that crosses the waterline. */
+    beach?: boolean;
+    shoreZ?: number;
+    slope?: number;
+    oceanFloor?: number;
+    duneHeight?: number;
+    duneRun?: number;
+    shoreNoise?: number;
   };
   /** Pool enclosure config (deck/walls/floor colors + dimensions). */
   pool?: {
@@ -129,6 +137,35 @@ export interface Preset {
   scene?: { sky?: boolean; cameraFar?: number };
   /** River flow direction (XZ) and speed (m/s) — drives flow-scroll shader + buoyancy current. */
   flow?: { dir: [number, number]; speed: number };
+  /**
+   * Spatially-varying flow + wet-shore foam (`seedocean-flowmap/1`).
+   * Lake/river/coast auto-enable a shore bake when omitted; set `false` to disable.
+   * Ocean/pool stay off unless an explicit block is provided.
+   * Painter exports embed `pixels` (base64 RGBA) for round-trip.
+   */
+  flowmap?: false | {
+    /** Texture resolution (default 256). */
+    size?: number;
+    /** World meters covered, centered on origin (default derived from patch/river/terrain). */
+    worldExtent?: number;
+    /** Multiplier on base flow.speed written into the B channel (default 1). */
+    flowStrength?: number;
+    /** Wet-shore foam band. `false` disables; omit for waterType defaults. */
+    shore?: false | {
+      waterLevel?: number;
+      bandWidth?: number;
+      foamStrength?: number;
+    };
+    /** Coastal surf break band (depth-based white water + onshore rush). */
+    surf?: false | {
+      breakDepth?: number;
+      breakWidth?: number;
+      foamStrength?: number;
+      rushSpeed?: number;
+    };
+    /** Base64 RGBA pixels from FlowMap.toJSON() — painter round-trip. */
+    pixels?: string;
+  };
   /** River ribbon mesh config (Catmull-Rom centerline + width). */
   river?: {
     points?: number[][];
@@ -168,6 +205,33 @@ export interface OceanState {
   starsDensity: number;
 }
 
+export interface DemoObjectsConfig {
+  buoy?: boolean;
+  boat?: boolean;
+  crates?: boolean;
+  buoyPosition?: [number, number, number];
+  cratePositions?: Array<[number, number]>;
+}
+
+export interface DemoObjectsHandle {
+  buoy?: THREE.Object3D | null;
+  boat?: THREE.Object3D | null;
+  crates?: THREE.Object3D[];
+}
+
+export interface DemoObjectsContext {
+  preset: Preset;
+  scene: THREE.Scene;
+  ocean: FFTOceanHandle;
+  buoyancySystem?: BuoyancySystem;
+  submergedMix: { value: number };
+}
+
+export type DemoObjectsOption =
+  | boolean
+  | DemoObjectsConfig
+  | ((ctx: DemoObjectsContext) => DemoObjectsHandle | null);
+
 export interface SeedOceanOptions {
   container?: HTMLElement;
   renderer?: THREE.WebGPURenderer;
@@ -179,7 +243,11 @@ export interface SeedOceanOptions {
   seafloor?: boolean;
   underwater?: boolean;
   buoyancy?: boolean;
-  demoObjects?: boolean;
+  /**
+   * Demo buoyancy props. `true` = default waterType-aware factory;
+   * config object toggles pieces; factory fn for full control; `false`/omit = none.
+   */
+  demoObjects?: DemoObjectsOption;
   validateFFT?: boolean;
   fftGrid?: number;
   quality?: Quality;
@@ -238,6 +306,13 @@ export declare class SeedOcean {
   tick(): FrameInfo;
   resize(width: number, height: number): void;
   exportGLB(filename?: string): Promise<void>;
+  /** Re-bake FlowMap from the current preset (wipes painter strokes). */
+  resetFlowMap(): void;
+  /**
+   * Serialize live design to seedocean-preset/1, embedding painted FlowMap
+   * pixels when present. Set `download: true` to trigger a browser download.
+   */
+  exportPreset(opts?: { download?: boolean; filename?: string }): PresetEnvelope;
   dispose(): void;
 }
 
@@ -256,6 +331,8 @@ export interface FFTOceanHandle {
   };
   shading: Record<string, THREE.IUniform | { value: unknown }>;
   wakeField: WakeField;
+  /** Spatially-varying flow + shore foam; null for ocean/pool. */
+  flowMap: FlowMap | null;
   spectrumParams: SpectrumParams & Record<string, unknown>;
   applyPreset: (preset: Preset, state: OceanState) => Promise<void>;
   applyLiveTuning: (preset: Preset, state: OceanState) => void;
@@ -289,7 +366,7 @@ export interface SeafloorHandle {
   updateUnderwater: (mix: number) => void;
 }
 
-/** Displaced terrain basin returned by {@link buildTerrain} (lake/river). */
+/** Displaced terrain returned by {@link buildTerrain} (lake/river/coast). */
 export interface TerrainHandle extends SeafloorHandle {
   /** CPU-side height query at world XZ, clamped to the terrain square. */
   getHeight: (x: number, z: number) => number;
@@ -341,6 +418,81 @@ export interface WakeField {
   upload(): void;
   dirty?: boolean;
 }
+
+/** Schema tag for FlowMap payloads (`seedocean-flowmap/1`). */
+export type FlowMapFormat = 'seedocean-flowmap/1';
+
+export const FLOWMAP_FORMAT: FlowMapFormat;
+
+/** Coverage stats from a baked FlowMap (Design API / bake introspection). */
+export interface FlowMapStats {
+  size: number;
+  worldExtent: number;
+  shoreCoverage: number;
+  flowCoverage: number;
+  meanShore: number;
+}
+
+/**
+ * CPU-authored RGBA flow + shore field.
+ * R/G = signed flow dir, B = speed scale [0,1], A = shore foam [0,1].
+ */
+export declare class FlowMap {
+  constructor(size?: number, worldExtent?: number);
+  readonly size: number;
+  worldExtent: number;
+  readonly data: Uint8Array;
+  readonly texture: THREE.Texture;
+  clear(): void;
+  bakeUniformFlow(dirX: number, dirZ: number, speedScale?: number): void;
+  bakeRiverFlow(points: number[][], opts?: { width?: number; speedScale?: number; margin?: number }): void;
+  bakeShoreRing(radius: number, opts?: { bandWidth?: number; foamStrength?: number }): void;
+  bakeShoreChannel(points: number[][], opts?: { width?: number; bandWidth?: number; foamStrength?: number }): void;
+  bakeShoreFromHeight(getHeight: (x: number, z: number) => number, opts?: {
+    waterLevel?: number; bandWidth?: number; foamStrength?: number;
+  }): void;
+  bakeCoastalSurf(getHeight: (x: number, z: number) => number, opts?: {
+    waterLevel?: number;
+    breakDepth?: number;
+    breakWidth?: number;
+    foamStrength?: number;
+    rushSpeed?: number;
+    shoreBand?: number;
+    shoreFoam?: number;
+  }): void;
+  paint(
+    x: number, z: number, dirX: number, dirZ: number,
+    speed?: number, shore?: number, radius?: number,
+    mode?: 'flow' | 'shore' | 'both' | 'erase',
+  ): void;
+  isPainted(): boolean;
+  toJSON(): { format: FlowMapFormat; size: number; worldExtent: number; pixels: string };
+  fromJSON(json: { size?: number; worldExtent?: number; pixels?: string }): boolean;
+  sample(x: number, z: number): { dirX: number; dirZ: number; speed: number; shore: number };
+  stats(): FlowMapStats;
+  upload(): void;
+  dispose(): void;
+}
+
+export declare function normalizeFlowMapConfig(
+  raw: Preset['flowmap'],
+  preset?: Partial<Preset>,
+): {
+  format: FlowMapFormat;
+  size: number;
+  worldExtent: number;
+  shore: { enabled: boolean; waterLevel: number; bandWidth: number; foamStrength: number } | null;
+  flowStrength: number;
+  surf: { breakDepth: number; breakWidth: number; foamStrength: number; rushSpeed: number } | null;
+} | null;
+
+export declare function bakeFlowMapForPreset(preset: Preset): FlowMap | null;
+export declare function populateFlowMap(
+  map: FlowMap,
+  preset: Preset,
+  cfg: NonNullable<ReturnType<typeof normalizeFlowMapConfig>>,
+): void;
+export declare function makeCoastHeightFn(preset: Preset): ((x: number, z: number) => number) | null;
 
 export interface AtmosphereHandle {
   group: THREE.Group;
@@ -395,6 +547,20 @@ export declare function makeRiverChannelHeight(points: number[][], opts?: {
   octaves?: number;
 }): (x: number, z: number) => number;
 
+/** Coastal beach height: cross-shore slope that crosses the waterline. */
+export declare function makeBeachHeight(opts?: {
+  shoreZ?: number;
+  slope?: number;
+  oceanFloor?: number;
+  duneHeight?: number;
+  duneRun?: number;
+  shoreNoise?: number;
+  seed?: number;
+  amplitude?: number;
+  frequency?: number;
+  octaves?: number;
+}): (x: number, z: number) => number;
+
 export declare function buildTerrain(opts?: {
   size?: number;
   resolution?: number;
@@ -408,6 +574,18 @@ export declare function buildPoolScene(
   preset?: Preset,
   sunDir?: { value: THREE.Vector3 },
 ): SeafloorHandle;
+
+export declare function resolveDemoObjects(
+  option: DemoObjectsOption | undefined,
+  ctx: DemoObjectsContext,
+): DemoObjectsHandle | null;
+
+export declare function buildDefaultDemoObjects(
+  ctx: DemoObjectsContext,
+  cfg?: DemoObjectsConfig,
+): DemoObjectsHandle;
+
+export declare function buildBoat(hullMaterial?: THREE.Material): THREE.Group;
 
 /** Default gently-meandering river centerline. */
 export declare function defaultRiverCenterline(length?: number, meander?: number): number[][];
@@ -531,7 +709,7 @@ export interface PresetSchema {
   folders: Record<string, SchemaEntry[]>;
 }
 
-/** Result of design(): sea-state + geometry + terrain budget, no renderer. */
+/** Result of design(): sea-state + geometry + terrain + flowmap budget, no renderer. */
 export interface DesignResult {
   preset: Preset;
   state: OceanState;
@@ -539,6 +717,8 @@ export interface DesignResult {
   seaState: SpectrumStats;
   stats: GeometryStats;
   terrain: { minHeight: number; maxHeight: number; sampleCount: number } | null;
+  /** FlowMap coverage after bake; null when the preset has no flowmap. */
+  flowmap: FlowMapStats | null;
 }
 
 /** Serialized preset envelope (seedocean-preset/1). */

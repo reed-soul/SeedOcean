@@ -28,6 +28,7 @@ const SETTLE_MS = 7000;
 const PRESET_SHOTS = [
   { id: 'dawn', cam: [4, 6, 30], look: [0, 1, 0] },
   { id: 'coastal', cam: [-6, 5, 28], look: [-12, 1, 10] },
+  { id: 'surf', cam: [-22, 7, 28], look: [0, 1, 10] },
   { id: 'swell', cam: [10, 8, 36], look: [0, 0, 0] },
   { id: 'sunset', cam: [-8, 5, 26], look: [0, 1, -6] },
   { id: 'storm', cam: [6, 9, 34], look: [0, 1, 0] },

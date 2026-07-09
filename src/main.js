@@ -1,8 +1,8 @@
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import WebGPU from 'three/addons/capabilities/WebGPU.js';
 import { SeedOcean } from './seedocean.js';
-import { PRESETS } from './presets/index.js';
 import { buildGUI } from './ui/controls.js';
+import { attachShorelinePainter } from './ui/shoreline-painter.js';
 import './ui/theme.css';
 
 const hud = document.getElementById('hud');
@@ -21,6 +21,7 @@ if (!WebGPU.isAvailable()) {
 
 let seedOcean;
 let controls;
+let painter;
 
 async function init() {
   // Allow `?preset=ID` to boot straight into a preset (useful for bounded-water
@@ -49,13 +50,18 @@ async function init() {
     );
   }
 
+  painter = attachShorelinePainter({ ocean: seedOcean, controls });
+
   buildGUI({
     state: seedOcean.state,
+    brush: painter.brush,
     onPreset: (id) => seedOcean.applyPreset(id),
     onReseed: () => seedOcean.applyPreset(seedOcean.preset),
     onLive: () => seedOcean.applyLiveTuning(),
     onSky: () => seedOcean.syncSky(),
     onExport: () => seedOcean.exportGLB(),
+    onExportPreset: () => seedOcean.exportPreset({ download: true }),
+    onBrushReset: () => painter.reset(),
   });
 
   window.addEventListener('resize', onResize);
@@ -74,8 +80,9 @@ function animate() {
   if (hud) {
     const { preset, state, ocean, boat } = seedOcean;
     const mode = uMix > 0.45 ? 'UNDERWATER' : 'surface';
+    const brushHint = painter?.brush?.enabled ? ' · Shift+drag paint' : '';
     hud.textContent = [
-      `SeedOcean v${seedOcean.version} · ${mode}`,
+      `SeedOcean v${seedOcean.version} · ${mode}${brushHint}`,
       `${preset.name} · seed ${state.seed}`,
       `grid ${ocean.simulator.N}² · ${ocean.simulator.cascades.length} cascades · boat y ${boat?.position.y.toFixed(2) ?? '—'}m`,
       `wake + refraction · t ${t.toFixed(1)}s`,

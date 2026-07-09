@@ -52,11 +52,14 @@ const result = SeedOceanAPI.design({
 
 // result.terrain — height envelope for bounded water (null for ocean/pool)
 //   { minHeight: -6.35, maxHeight: 26.52, sampleCount: 1089 }
+
+// result.flowmap — FlowMap bake coverage (null for ocean/pool)
+//   { size: 256, worldExtent: 200, shoreCoverage: 0.055, flowCoverage: 0, meanShore: 0.44 }
 ```
 
 Use `design()` to size a scene: pick a buoyancy sample count from Hs, set camera
-height from the terrain envelope, budget foam from `stats.triangles` — before
-spending a renderer.
+height from the terrain envelope, budget foam from `stats.triangles` / shore
+coverage — before spending a renderer.
 
 ### Preset round-trip (`seedocean-preset/1`)
 
@@ -106,4 +109,5 @@ algorithm/architecture brief.
 
 - `seedocean.js` — this API (design + live adapter)
 - `../core/stats.js` — `statsOf()` + `spectrumStats()` + `bandStats()` (pure CPU)
+- `../core/flow-map.js` — `bakeFlowMapForPreset` / `FlowMap` (`seedocean-flowmap/1`)
 - `../presets/index.js` — `PRESETS`, `normalizePreset`, `PRESET_FORMAT`

@@ -8,6 +8,12 @@ export const lake = {
   description: 'Still mountain lake ringed by procedural hills — bounded circular water over a terrain basin.',
   waterType: 'lake',
   patch: { width: 80, length: 80, cells: 96, shape: 'circle', segments: 96 },
+  // Wet-shore foam ring at the disc edge (seedocean-flowmap/1). Lake has no
+  // directional flow — only the A channel (shore) is populated.
+  flowmap: {
+    size: 256,
+    shore: { bandWidth: 4.5, foamStrength: 0.85 },
+  },
   terrain: {
     size: 800,
     resolution: 220,

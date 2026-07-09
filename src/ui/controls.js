@@ -3,6 +3,15 @@ import { PRESET_LIST } from '../presets/index.js';
 
 /**
  * @param {object} ctx
+ * @param {object} ctx.state
+ * @param {(id: string) => void} ctx.onPreset
+ * @param {() => void} ctx.onReseed
+ * @param {() => void} ctx.onLive
+ * @param {() => void} ctx.onSky
+ * @param {() => void} ctx.onExport
+ * @param {object} [ctx.brush] — shoreline painter brush state (mutated in place)
+ * @param {() => void} [ctx.onBrushReset]
+ * @param {() => void} [ctx.onExportPreset]
  */
 export function buildGUI(ctx) {
   const gui = new GUI({ title: 'SeedOcean' });
@@ -40,7 +49,26 @@ export function buildGUI(ctx) {
   sky.add(state, 'cloudCoverage', 0, 1, 0.01).name('Clouds').onChange(() => ctx.onSky());
   sky.add(state, 'starsDensity', 0, 1, 0.01).name('Stars').onChange(() => ctx.onSky());
 
-  gui.add({ export: ctx.onExport }, 'export').name('Export .glb');
+  // Shoreline painter (Phase 11d) — Shift+drag on the water plane.
+  if (ctx.brush) {
+    const brush = ctx.brush;
+    const paint = gui.addFolder('Shoreline brush');
+    paint.add(brush, 'enabled').name('Enabled');
+    paint.add(brush, 'mode', ['shore', 'flow', 'erase']).name('Mode');
+    paint.add(brush, 'radius', 1, 24, 0.5).name('Radius m');
+    paint.add(brush, 'strength', 0.05, 1, 0.01).name('Strength');
+    paint.add(brush, 'direction', 0, 360, 1).name('Flow °');
+    if (ctx.onBrushReset) {
+      paint.add({ reset: ctx.onBrushReset }, 'reset').name('Reset map');
+    }
+    paint.open();
+  }
+
+  const io = gui.addFolder('Export');
+  io.add({ export: ctx.onExport }, 'export').name('Export .glb');
+  if (ctx.onExportPreset) {
+    io.add({ save: ctx.onExportPreset }, 'save').name('Save preset JSON');
+  }
 
   return gui;
 }

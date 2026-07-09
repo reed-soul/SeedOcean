@@ -26,6 +26,8 @@ jobs:
       - run: pnpm run build:pages
       - name: Type-check
         run: pnpm run build:types
+      - name: Design API + FlowMap self-test
+        run: pnpm run test:api
 
   fft-selftest:
     runs-on: ubuntu-latest

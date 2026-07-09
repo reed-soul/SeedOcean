@@ -12,6 +12,12 @@ export const river = {
   // appear to move with the current; buoyancy bodies are pushed downstream by
   // BuoyancySystem.current.
   flow: { dir: [1, 0.25], speed: 2.5 },
+  // Spatially-varying flow + wet-shore foam (seedocean-flowmap/1). River
+  // tangents are baked from river.points; shore foam rings the channel edge.
+  flowmap: {
+    size: 256,
+    shore: { bandWidth: 3.5, foamStrength: 0.75 },
+  },
   // Ribbon mesh — gently meandering centerline, ~14m wide, ~200m long.
   river: {
     width: 14,

@@ -1,0 +1,181 @@
+#!/usr/bin/env node
+/**
+ * Headless Design API + FlowMap smoke tests — pure CPU, no WebGPU.
+ * Run: pnpm test:api
+ */
+import assert from 'node:assert/strict';
+import {
+  describe,
+  design,
+  listPresets,
+  getSchema,
+  toPreset,
+  fromPreset,
+  PRESET_FORMAT,
+  bakeFlowMapForPreset,
+  normalizeFlowMapConfig,
+  FLOWMAP_FORMAT,
+  FlowMap,
+} from '../src/api/seedocean.js';
+import { PRESETS } from '../src/presets/index.js';
+
+let passed = 0;
+function ok(label) {
+  passed++;
+  console.log(`  ✓ ${label}`);
+}
+
+console.log('Design API');
+
+const presets = listPresets();
+assert.equal(presets.length, 20);
+assert.ok(presets.every((p) => p.key && p.name && p.waterType));
+assert.ok(presets.some((p) => p.key === 'surf' && p.waterType === 'coast'));
+ok(`listPresets → ${presets.length}`);
+
+const menu = describe();
+assert.match(menu, /SeedOcean presets/);
+assert.match(menu, /coastal/);
+assert.match(menu, /surf/);
+ok('describe() menu');
+
+const coastalSchema = getSchema('coastal');
+assert.equal(coastalSchema.preset, 'coastal');
+assert.ok(coastalSchema.folders.spectrum.length >= 3);
+ok('getSchema(coastal)');
+
+assert.throws(() => getSchema('not-a-preset'), /unknown preset/);
+ok('getSchema rejects unknown id');
+
+const coastal = design({ preset: 'coastal', seed: 7 });
+assert.ok(coastal.seaState.significantHeight > 1);
+assert.ok(coastal.stats.triangles > 100);
+assert.equal(coastal.terrain, null);
+assert.equal(coastal.flowmap, null);
+ok(`design(coastal) Hs=${coastal.seaState.significantHeight.toFixed(2)} tris=${coastal.stats.triangles}`);
+
+const lake = design({ preset: 'lake' });
+assert.ok(lake.terrain);
+assert.ok(lake.terrain.maxHeight > lake.terrain.minHeight);
+assert.ok(lake.flowmap);
+assert.ok(lake.flowmap.shoreCoverage > 0.02 && lake.flowmap.shoreCoverage < 0.2);
+assert.equal(lake.flowmap.flowCoverage, 0);
+ok(`design(lake) shore=${lake.flowmap.shoreCoverage} terrain=[${lake.terrain.minHeight},${lake.terrain.maxHeight}]`);
+
+const river = design({ preset: 'river' });
+assert.ok(river.terrain);
+assert.ok(river.flowmap);
+assert.ok(river.flowmap.flowCoverage > 0.02);
+assert.ok(river.flowmap.shoreCoverage > 0.01);
+ok(`design(river) flow=${river.flowmap.flowCoverage} shore=${river.flowmap.shoreCoverage}`);
+
+const surf = design({ preset: 'surf' });
+assert.equal(surf.preset.waterType, 'coast');
+assert.ok(surf.terrain);
+assert.ok(surf.terrain.minHeight < 0 && surf.terrain.maxHeight > 0, 'beach crosses waterline');
+assert.ok(surf.flowmap);
+assert.ok(surf.flowmap.shoreCoverage > 0.1 && surf.flowmap.shoreCoverage < 0.55);
+assert.ok(surf.flowmap.flowCoverage > 0.1);
+ok(`design(surf) shore=${surf.flowmap.shoreCoverage} flow=${surf.flowmap.flowCoverage} terrain=[${surf.terrain.minHeight},${surf.terrain.maxHeight}]`);
+
+const json = toPreset({ preset: 'coastal', seed: 42, controls: { waveAmp: 1.5 } });
+assert.equal(json.format, PRESET_FORMAT);
+assert.equal(json.preset.waveAmp, 1.5);
+assert.equal(json.preset.seed, 42);
+const back = fromPreset(json);
+assert.equal(back.preset.id, 'coastal');
+assert.equal(back.seed, 42);
+assert.equal(back.controls.waveAmp, 1.5);
+ok('toPreset ↔ fromPreset round-trip');
+
+const legacy = fromPreset({ id: 'storm', name: 'Storm', seed: 1, waveAmp: 2, waveSpeed: 1, windDirection: 0,
+  waterColor: 0, deepColor: 0, scatterColor: 0, foamColor: 0, foamStrength: 1, sssStrength: 1,
+  roughness: 0.1, underwaterColor: 0, godRayStrength: 0.2,
+  sky: { elevation: 10, azimuth: 0, exposure: 0.3, cloudCoverage: 0.5 } });
+assert.equal(legacy.preset.format, PRESET_FORMAT);
+ok('fromPreset normalizes legacy (no format)');
+
+console.log('\nFlowMap');
+
+assert.equal(FLOWMAP_FORMAT, 'seedocean-flowmap/1');
+assert.equal(normalizeFlowMapConfig(undefined, PRESETS.coastal), null);
+assert.equal(normalizeFlowMapConfig(false, PRESETS.lake), null);
+assert.ok(normalizeFlowMapConfig(undefined, PRESETS.lake));
+ok('normalizeFlowMapConfig auto-enable / disable');
+
+const lakeMap = bakeFlowMapForPreset(PRESETS.lake);
+assert.ok(lakeMap);
+const rim = lakeMap.sample(40, 0);
+const center = lakeMap.sample(0, 0);
+assert.ok(rim.shore > 0.5, `rim shore=${rim.shore}`);
+assert.ok(center.shore < 0.05, `center shore=${center.shore}`);
+lakeMap.dispose();
+ok('lake shore ring peaks at disc edge');
+
+const riverMap = bakeFlowMapForPreset(PRESETS.river);
+const mid = riverMap.sample(0, -4.94);
+assert.ok(mid.speed > 0.5, `mid speed=${mid.speed}`);
+assert.ok(Math.hypot(mid.dirX, mid.dirZ) > 0.8);
+const bank = riverMap.sample(0, -4.94 + 7);
+assert.ok(bank.shore > 0.3, `bank shore=${bank.shore}`);
+riverMap.dispose();
+ok('river flow follows centerline + shore at channel edge');
+
+const surfMap = bakeFlowMapForPreset(PRESETS.surf);
+assert.ok(surfMap);
+const deep = surfMap.sample(0, -80);
+const near = surfMap.sample(0, 0);
+const dry = surfMap.sample(0, 50);
+assert.ok(deep.shore < 0.1, `deep foam=${deep.shore}`);
+assert.ok(near.shore > 0.5, `nearshore foam=${near.shore}`);
+assert.ok(dry.shore < 0.05, `dune foam=${dry.shore}`);
+assert.ok(near.speed > deep.speed, 'rush stronger near shore than deep');
+surfMap.dispose();
+ok('coastal surf: white water near shore, quiet offshore');
+
+assert.equal(bakeFlowMapForPreset(PRESETS.coastal), null);
+assert.equal(bakeFlowMapForPreset(PRESETS.pool), null);
+ok('ocean/pool skip FlowMap');
+
+console.log('\nPainter round-trip');
+
+const paintMap = new FlowMap(64, 40);
+paintMap.paint(0, 0, 0, 1, 0.8, 0.9, 5, 'shore');
+paintMap.paint(5, 0, 1, 0, 0.7, 0, 4, 'flow');
+assert.ok(paintMap.isPainted());
+const painted = paintMap.toJSON();
+assert.equal(painted.format, FLOWMAP_FORMAT);
+assert.ok(painted.pixels.length > 100);
+const restored = new FlowMap(64, 40);
+assert.ok(restored.fromJSON(painted));
+assert.ok(Math.abs(restored.sample(0, 0).shore - paintMap.sample(0, 0).shore) < 0.02);
+assert.ok(restored.sample(5, 0).speed > 0.3);
+// Erase clears toward neutral.
+paintMap.paint(0, 0, 0, 0, 0, 0, 8, 'erase');
+assert.ok(paintMap.sample(0, 0).shore < 0.5);
+paintMap.dispose();
+restored.dispose();
+ok('FlowMap toJSON ↔ fromJSON + erase mode');
+
+// Embedded pixels in a preset survive bakeFlowMapForPreset.
+const baked = bakeFlowMapForPreset({
+  ...PRESETS.surf,
+  flowmap: {
+    size: 64,
+    worldExtent: 40,
+    pixels: painted.pixels,
+    shore: { bandWidth: 2, foamStrength: 1 },
+    surf: false,
+  },
+});
+assert.ok(baked);
+assert.equal(baked.size, 64);
+assert.ok(baked.isPainted());
+assert.ok(baked.sample(0, 0).shore > 0.3);
+baked.dispose();
+ok('bakeFlowMapForPreset restores embedded pixels');
+
+console.log(`\n${passed} assertions passed.`);
+
+
+

@@ -7,14 +7,16 @@ import {
   screenUV, viewportSafeUV, viewportSharedTexture, reflector, fract, floor, step,
 } from 'three/tsl';
 import { makeDetailTexture } from './detail-texture.js';
+import { waterTypeOf, WATER } from '../water-types.js';
 
 /**
  * @param {import('./ocean-cascade.js').OceanCascade[]} cascades
  * @param {number[]} lengthScales
  * @param {ReturnType<typeof createShadingUniforms>} shading
  * @param {import('../wake-field.js').WakeField} [wakeField]
+ * @param {import('../flow-map.js').FlowMap} [flowMap]
  */
-export function createFFTSurfaceMaterial(cascades, lengthScales, shading, wakeField = null) {
+export function createFFTSurfaceMaterial(cascades, lengthScales, shading, wakeField = null, flowMap = null) {
   const mat = new THREE.MeshPhysicalNodeMaterial({
     transparent: true,
     side: THREE.DoubleSide,
@@ -35,8 +37,31 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading, wakeFi
   // cascade below rather than here. The un-flowed worldXZ is kept for wake /
   // detail / caustic sampling (those shouldn't drift).
   const worldXZ = positionLocal.xz.add(shading.clipOrigin);
-  // Per-frame flow offset in world meters = flowDir (unit) * flowSpeed * t.
-  const flowOffset = shading.flowDir.mul(shading.flowSpeed).mul(time);
+
+  // FlowMap (optional): RG = signed local flow dir, B = speed scale, A = shore foam.
+  // When present, localDir * localSpeed replaces the uniform flowDir*flowSpeed for
+  // cascade UV scrolling — so rivers meander and lakes stay still except at the
+  // shore band. When absent (or B≈0), fall back to the uniform preset.flow.
+  const flowMapTex = flowMap ? texture(flowMap.texture) : null;
+  const flowMapExtent = uniform(flowMap?.worldExtent ?? 100);
+  const flowMapSample = flowMapTex
+    ? flowMapTex.sample(saturate(worldXZ.div(flowMapExtent).add(0.5)))
+    : null;
+
+  // Per-frame flow offset in world meters.
+  // Uniform path: flowDir (unit) * flowSpeed * t.
+  // FlowMap path: decode RG → dir, B → speed scale, then * flowSpeed * t.
+  // Mix by B so texels with speed=0 keep the uniform current (or zero).
+  const uniformFlow = shading.flowDir.mul(shading.flowSpeed);
+  let flowVelocity = uniformFlow;
+  if (flowMapSample) {
+    const localDir = flowMapSample.rg.mul(2).sub(1);
+    const localSpeed = flowMapSample.b.mul(shading.flowSpeed);
+    const mapped = localDir.mul(localSpeed);
+    // Prefer the map wherever it has speed; otherwise keep the uniform.
+    flowVelocity = mix(uniformFlow, mapped, flowMapSample.b);
+  }
+  const flowOffset = flowVelocity.mul(time);
 
   const wakeTex = wakeField ? texture(wakeField.texture) : null;
   const wakeExtent = uniform(wakeField?.worldExtent ?? 220);
@@ -118,6 +143,13 @@ export function createFFTSurfaceMaterial(cascades, lengthScales, shading, wakeFi
       foamRaw.addAssign(wakeTex.sample(wakeUV).g.div(255).mul(shading.wakeFoam));
     }
 
+    // Wet-shore foam from FlowMap.A — peaks at the waterline where terrain
+    // crosses y≈0. Independent of Jacobian breaking so calm lakes still read
+    // a shoreline ring.
+    if (flowMapSample) {
+      foamRaw.addAssign(flowMapSample.a.mul(shading.shoreFoam));
+    }
+
     // Cartoon foam: hard edge instead of smoothstep.
     // Wider ramp — high foamScale on storm presets was snapping crests to hard white spikes.
     const coverageReal = smoothstep(float(0.12), float(1.05), foamRaw);
@@ -186,21 +218,49 @@ export function createShadingUniforms(preset) {
     celBands: uniform(preset.celBands ?? 4),
     // River flow: direction (unit vec2) + speed (m/s). Zero speed disables flow
     // scrolling (oceans/pools/lakes), so the uniform cost is one mad per cascade.
+    // When a FlowMap is bound, these become the *base* speed that map.B scales.
     flowDir: uniform(new THREE.Vector2(0, 0)),
     flowSpeed: uniform(0),
+    // Wet-shore foam gain from FlowMap.A. Zero when no shore bake is active.
+    shoreFoam: uniform(preset.flowmap?.shore?.foamStrength ?? 0),
   };
 }
 
 export function applyShadingUniforms(shading, preset, state) {
-  // River flow — read preset.flow (dir + speed), normalize the direction.
+  // River / coast flow — read preset.flow (dir + speed), normalize the direction.
+  // When no explicit flow is set but a FlowMap is available for painting, keep a
+  // unit base speed so painted B-channel strokes actually scroll the surface.
   if (preset.flow) {
     const [fx, fz] = preset.flow.dir;
     const len = Math.hypot(fx, fz) || 1;
     shading.flowDir.value.set(fx / len, fz / len);
     shading.flowSpeed.value = preset.flow.speed ?? 0;
+  } else if (preset.flowmap !== false) {
+    shading.flowDir.value.set(0, 1);
+    shading.flowSpeed.value = 1;
   } else {
     shading.flowDir.value.set(0, 0);
     shading.flowSpeed.value = 0;
+  }
+  // Shore foam gain — from explicit flowmap.shore, or waterType defaults.
+  // Ocean/pool with a painter-ready blank map still get a non-zero gain so
+  // stroked A-channel foam is visible (A stays 0 until painted).
+  const waterType = waterTypeOf(preset);
+  const shoreCfg = preset.flowmap?.shore;
+  if (shoreCfg === false) {
+    shading.shoreFoam.value = 0;
+  } else if (shoreCfg?.foamStrength != null) {
+    shading.shoreFoam.value = shoreCfg.foamStrength;
+  } else if (waterType === WATER.RIVER) {
+    shading.shoreFoam.value = 0.7;
+  } else if (waterType === WATER.LAKE) {
+    shading.shoreFoam.value = 0.9;
+  } else if (waterType === WATER.COAST) {
+    shading.shoreFoam.value = preset.flowmap?.surf?.foamStrength ?? 1.1;
+  } else if (preset.flowmap !== false) {
+    shading.shoreFoam.value = 0.9;
+  } else {
+    shading.shoreFoam.value = 0;
   }
   shading.waterColor.value.set(state.waterColor ?? preset.waterColor);
   shading.deepColor.value.set(state.deepColor ?? preset.deepColor);

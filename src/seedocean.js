@@ -8,18 +8,20 @@ import { validateFFT } from './core/fft/fft.js';
 import { buildEnvironment } from './core/environment.js';
 import { exportFFTOceanGLB } from './core/export-glb.js';
 import { BuoyancySampler } from './core/buoyancy.js';
-import { BuoyancySystem, BuoyancyBody } from './core/buoyancy-body.js';
+import { BuoyancySystem } from './core/buoyancy-body.js';
 import { buildSeafloor } from './core/seafloor.js';
 import { buildTerrain } from './core/terrain.js';
 import { buildPoolScene } from './core/pool-scene.js';
-import { buildBoat } from './core/boat.js';
 import { buildAtmosphere } from './core/atmosphere.js';
-import { createSubmergedMaterial } from './core/submerged-material.js';
 import { createUnderwaterPipeline } from './core/underwater-post.js';
 import { PRESETS, DEFAULT_PRESET } from './presets/index.js';
 import { resolvePreset } from './presets/resolve.js';
 import { stateFromPreset } from './state.js';
 import { disposeOcean, disposeSeafloor, disposeDemoObject } from './core/dispose.js';
+import { waterTypeOf, isEnclosed, usesTerrain, WATER } from './core/water-types.js';
+import { normalizeFlowMapConfig, populateFlowMap } from './core/flow-map.js';
+import { resolveDemoObjects } from './core/demo-objects.js';
+import { PRESET_FORMAT, normalizePreset } from './presets/index.js';
 
 const VERSION = '0.6.0-alpha';
 
@@ -38,7 +40,8 @@ const BELOW_FOG = { color: 0x032838, density: 0.0032 };
  * @property {boolean} [seafloor=true]
  * @property {boolean} [underwater=true]
  * @property {boolean} [buoyancy=true]
- * @property {boolean} [demoObjects=false] — buoy, boat, crates
+ * @property {boolean|object|Function} [demoObjects=false] — true = default factory;
+ *   config `{ buoy?, boat?, crates? }`; or `(ctx) => handle` for full control
  * @property {boolean} [validateFFT=false]
  * @property {number} [fftGrid=128] — size used only by the FFT self-test
  * @property {'perf'|'quality'} [quality='perf'] — 128² vs 256² simulation grid
@@ -107,9 +110,9 @@ export class SeedOcean {
     } else {
       // Bounded water uses a shorter far plane so distant sky/terrain edges
       // don't read as an ocean horizon. Ocean keeps 6000 for the open sea.
-      const waterType = this.preset.waterType ?? 'ocean';
-      const isBounded = waterType === 'pool' || waterType === 'lake' || waterType === 'river';
-      const far = this.preset.scene?.cameraFar ?? (isBounded ? 700 : 6000);
+      const waterType = waterTypeOf(this.preset);
+      const enclosed = isEnclosed(waterType);
+      const far = this.preset.scene?.cameraFar ?? (enclosed ? 700 : 6000);
       this.camera = new THREE.PerspectiveCamera(
         55,
         this.renderer.domElement.clientWidth / this.renderer.domElement.clientHeight || 1,
@@ -132,9 +135,8 @@ export class SeedOcean {
       // Bounded water hides the infinite sky dome — the horizon should read as
       // the enclosure (pool walls / valley hills / fog), not an ocean skyline.
       // preset.scene.sky defaults true for ocean, false for bounded water.
-      const waterType = this.preset.waterType ?? 'ocean';
-      const isBounded = waterType === 'pool' || waterType === 'lake' || waterType === 'river';
-      const skyOn = this.preset.scene?.sky ?? !isBounded;
+      const waterType = waterTypeOf(this.preset);
+      const skyOn = this.preset.scene?.sky ?? !isEnclosed(waterType);
       if (skyOn) {
         this.scene.add(this.env.sky);
       } else {
@@ -162,8 +164,8 @@ export class SeedOcean {
       // Bounded water (lake/river) gets displaced terrain as its basin/banks;
       // open water keeps the flat seafloor. Both expose the same handle shape
       // ({ mesh, updateUnderwater }) so update()/applyFogBlend are agnostic.
-      const waterType = this.preset.waterType ?? 'ocean';
-      if (waterType === 'lake' || waterType === 'river') {
+      const waterType = waterTypeOf(this.preset);
+      if (usesTerrain(waterType)) {
         this.seafloor = buildTerrain({
           preset: this.preset,
           sunDir: this.ocean.shading.sunDir,
@@ -171,7 +173,7 @@ export class SeedOcean {
           resolution: this.preset.terrain?.resolution ?? 128,
           seed: this.preset.seed,
         });
-      } else if (waterType === 'pool') {
+      } else if (waterType === WATER.POOL) {
         // Pool gets a full enclosure (deck + pool walls + tiled floor +
         // perimeter walls) instead of the 2400m flat seafloor.
         this.seafloor = buildPoolScene(this.preset, this.ocean.shading.sunDir);
@@ -220,80 +222,16 @@ export class SeedOcean {
   }
 
   _buildDemoObjects() {
-    const { preset, scene, ocean, buoyancySystem, submergedMix } = this;
-    // The boat/crates are open-water demos sized for the ocean (5.5m hull,
-    // crates at 12-18m radius). In a 25m pool they're absurdly out of scale,
-    // and lake/river have their own context. Only spawn the buoy for bounded
-    // water (it reads fine in all three).
-    const waterType = preset.waterType ?? 'ocean';
-    const isBounded = waterType === 'pool' || waterType === 'lake' || waterType === 'river';
-    const spawnBoat = !isBounded;
-    const spawnCrates = !isBounded;
-
-    const buoyMat = createSubmergedMaterial(
-      0xff5533,
-      preset.causticColor ?? 0x3a8a9a,
-      ocean.shading.sunDir,
-      submergedMix,
-      { causticStrength: 0.65 },
-    );
-    this.buoy = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.35, 0.5, 1.2, 12),
-      buoyMat.material,
-    );
-    this.buoy.position.set(6, 0.6, -4);
-    this.buoy.name = 'Buoy';
-    scene.add(this.buoy);
-    buoyancySystem.add(new BuoyancyBody(this.buoy, {
-      buoyancyOffset: 0.75,
-      samples: [[0, 0]],
-      springK: 28,
-      damping: 6,
-    }));
-
-    const boatHullMat = createSubmergedMaterial(
-      0xc8d4dc,
-      preset.causticColor ?? 0x3a8a9a,
-      ocean.shading.sunDir,
-      submergedMix,
-      { causticStrength: 0.48, roughness: 0.45, metalness: 0.12 },
-    );
-    if (spawnBoat) {
-      this.boat = buildBoat(boatHullMat.material);
-      scene.add(this.boat);
-      buoyancySystem.add(new BuoyancyBody(this.boat, {
-        buoyancyOffset: 0.35,
-        samples: [[0, 0], [2.2, 0], [-2.2, 0], [0, 0.9], [0, -0.9]],
-        springK: 14,
-        damping: 4.5,
-        maxTilt: 0.22,
-      }));
-    }
-
-    this.crates = [];
-    if (spawnCrates) {
-      for (const [cx, cz] of [[12, -8], [-10, 14], [18, 6]]) {
-        const crateMat = createSubmergedMaterial(
-          0xc49a6c,
-          preset.causticColor ?? 0x3a8a9a,
-          ocean.shading.sunDir,
-          submergedMix,
-          { causticStrength: 0.5, roughness: 0.75 },
-        );
-        const crate = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 1.4), crateMat.material);
-        crate.position.set(cx, 0.7, cz);
-        crate.name = 'Crate';
-        scene.add(crate);
-        this.crates.push(crate);
-        buoyancySystem.add(new BuoyancyBody(crate, {
-          buoyancyOffset: 0.7,
-          samples: [[0, 0]],
-          springK: 32,
-          damping: 7,
-          maxTilt: 0.12,
-        }));
-      }
-    }
+    const handle = resolveDemoObjects(this.options.demoObjects, {
+      preset: this.preset,
+      scene: this.scene,
+      ocean: this.ocean,
+      buoyancySystem: this.buoyancySystem,
+      submergedMix: this.submergedMix,
+    });
+    this.buoy = handle?.buoy ?? null;
+    this.boat = handle?.boat ?? null;
+    this.crates = handle?.crates ?? null;
   }
 
   async applyPreset(idOrPreset, nextState) {
@@ -352,8 +290,8 @@ export class SeedOcean {
     this.ocean.updateClipmap(this.camera);
 
     // --- Rebuild seafloor / terrain / pool enclosure ---
-    const waterType = this.preset.waterType ?? 'ocean';
-    if (waterType === 'lake' || waterType === 'river') {
+    const waterType = waterTypeOf(this.preset);
+    if (usesTerrain(waterType)) {
       this.seafloor = buildTerrain({
         preset: this.preset,
         sunDir: this.ocean.shading.sunDir,
@@ -361,7 +299,7 @@ export class SeedOcean {
         resolution: this.preset.terrain?.resolution ?? 128,
         seed: this.preset.seed,
       });
-    } else if (waterType === 'pool') {
+    } else if (waterType === WATER.POOL) {
       this.seafloor = buildPoolScene(this.preset, this.ocean.shading.sunDir);
     } else {
       this.seafloor = buildSeafloor(this.preset, this.ocean.shading.sunDir);
@@ -406,9 +344,9 @@ export class SeedOcean {
    */
   _applySceneBackdrop() {
     if (!this.env) return;
-    const waterType = this.preset.waterType ?? 'ocean';
-    const isBounded = waterType === 'pool' || waterType === 'lake' || waterType === 'river';
-    const skyOn = this.preset.scene?.sky ?? !isBounded;
+    const waterType = waterTypeOf(this.preset);
+    const enclosed = isEnclosed(waterType);
+    const skyOn = this.preset.scene?.sky ?? !enclosed;
     this.env.sky.visible = skyOn;
     if (skyOn) {
       this.scene.background = null;
@@ -419,7 +357,7 @@ export class SeedOcean {
     // Camera far plane: bounded water uses a tighter far so distant geometry
     // doesn't read as an ocean horizon.
     if (this._ownsCamera) {
-      this.camera.far = this.preset.scene?.cameraFar ?? (isBounded ? 700 : 6000);
+      this.camera.far = this.preset.scene?.cameraFar ?? (enclosed ? 700 : 6000);
       this.camera.updateProjectionMatrix();
     }
   }
@@ -574,6 +512,56 @@ export class SeedOcean {
       this.ocean.simulator,
       filename ?? `seedocean-${slug}.glb`,
     );
+  }
+
+  /**
+   * Re-bake the FlowMap from the current preset, wiping painter strokes.
+   * No-op when the ocean has no FlowMap (`flowmap: false`).
+   */
+  resetFlowMap() {
+    const map = this.ocean?.flowMap;
+    if (!map) return;
+    const cfg = normalizeFlowMapConfig(this.preset.flowmap, this.preset);
+    if (cfg) populateFlowMap(map, this.preset, cfg);
+    else map.clear();
+    map.upload();
+  }
+
+  /**
+   * Serialize the live design to a seedocean-preset/1 envelope, embedding the
+   * painted FlowMap pixels when present. Download as JSON when `download` is
+   * true (demo Save); otherwise return the object for programmatic use.
+   *
+   * @param {{ download?: boolean, filename?: string }} [opts]
+   * @returns {{ format: string, preset: object }}
+   */
+  exportPreset({ download = false, filename } = {}) {
+    const state = this.state;
+    const merged = { ...this.preset, ...stateFromPreset(this.preset), ...state };
+    // Embed painted FlowMap so round-trip restores strokes.
+    const map = this.ocean?.flowMap;
+    if (map && map.isPainted()) {
+      const painted = map.toJSON();
+      const prev = typeof merged.flowmap === 'object' && merged.flowmap ? merged.flowmap : {};
+      merged.flowmap = {
+        ...prev,
+        size: painted.size,
+        worldExtent: painted.worldExtent,
+        pixels: painted.pixels,
+      };
+    }
+    const envelope = { format: PRESET_FORMAT, preset: normalizePreset(merged) };
+
+    if (download && typeof document !== 'undefined') {
+      const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename ?? `seedocean-${this.preset.id}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    return envelope;
   }
 
   dispose() {
