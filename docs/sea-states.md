@@ -124,21 +124,26 @@
 - **Carriers:** `waterType: 'river'`, `flow`, `river.points`, `terrain.channel`,
   FlowMap river-tangent bake + shore channel.
 
+### Coastal Surf (`surf`)
+- **Signature:** Open sea meeting a sandy beach; white-water break in the shallows;
+  wet foam on the swash; dunes inland.
+- **Basis:** Fetch-limited coastal wind-sea over a sloping beach (Issue #10 / Phase 11c).
+- **Carriers:** `waterType: 'coast'`, `terrain.beach` (crosses y=0), `flowmap.surf`
+  (depth-based break + onshore rush), clipmap water + sky kept on.
+
 ---
 
 ## Capability boundary
 
-| | Ocean | Pool | Lake | River |
-|---|---|---|---|---|
-| Mesh | Clipmap (∞) | Rect patch | Circle patch | Catmull-Rom ribbon |
-| Enclosure | Flat seafloor | Deck/walls/tiles | fBm basin | Channel gorge |
-| Flow | Uniform wind-sea | None | None (shore foam only) | Directional + FlowMap |
-| FlowMap | Off | Off | Shore ring | Tangents + shore |
-| Demo boat/crates | Yes | Buoy only | Buoy only | Buoy only |
+| | Ocean | Pool | Lake | River | Coast |
+|---|---|---|---|---|---|
+| Mesh | Clipmap (∞) | Rect patch | Circle patch | Catmull-Rom ribbon | Clipmap (∞) |
+| Enclosure | Flat seafloor | Deck/walls/tiles | fBm basin | Channel gorge | Beach slope |
+| Flow | Uniform wind-sea | None | None (shore foam only) | Directional + FlowMap | Onshore rush in surf zone |
+| FlowMap | Off | Off | Shore ring | Tangents + shore | Depth break + swash |
+| Demo boat/crates | Yes | Buoy only | Buoy only | Buoy only | Yes |
 
-**Not yet:** Coastal Surf (breaking near-shore + tidal band), interactive shoreline
-editor (Phase 11d), height-crossing shore bake for true beaches
-(`FlowMap.bakeShoreFromHeight` exists for that future path).
+**Not yet:** Interactive shoreline editor (Phase 11d) — `FlowMap.paint()` exists as the brush primitive.
 
 ---
 

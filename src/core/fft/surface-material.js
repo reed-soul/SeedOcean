@@ -7,6 +7,7 @@ import {
   screenUV, viewportSafeUV, viewportSharedTexture, reflector, fract, floor, step,
 } from 'three/tsl';
 import { makeDetailTexture } from './detail-texture.js';
+import { waterTypeOf, WATER } from '../water-types.js';
 
 /**
  * @param {import('./ocean-cascade.js').OceanCascade[]} cascades
@@ -236,16 +237,20 @@ export function applyShadingUniforms(shading, preset, state) {
     shading.flowDir.value.set(0, 0);
     shading.flowSpeed.value = 0;
   }
-  // Shore foam gain — from explicit flowmap.shore, or a sensible default when
-  // lake/river auto-enable the shore baker (see normalizeFlowMapConfig).
-  const waterType = preset.waterType ?? 'ocean';
+  // Shore foam gain — from explicit flowmap.shore, or waterType defaults when
+  // lake/river/coast auto-enable the shore baker (see normalizeFlowMapConfig).
+  const waterType = waterTypeOf(preset);
   const shoreCfg = preset.flowmap?.shore;
   if (shoreCfg === false) {
     shading.shoreFoam.value = 0;
   } else if (shoreCfg?.foamStrength != null) {
     shading.shoreFoam.value = shoreCfg.foamStrength;
-  } else if (waterType === 'lake' || waterType === 'river') {
-    shading.shoreFoam.value = waterType === 'river' ? 0.7 : 0.9;
+  } else if (waterType === WATER.RIVER) {
+    shading.shoreFoam.value = 0.7;
+  } else if (waterType === WATER.LAKE) {
+    shading.shoreFoam.value = 0.9;
+  } else if (waterType === WATER.COAST) {
+    shading.shoreFoam.value = preset.flowmap?.surf?.foamStrength ?? 1.1;
   } else {
     shading.shoreFoam.value = 0;
   }

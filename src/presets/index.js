@@ -3,6 +3,7 @@ export { dawn } from './dawn.js';
 export { mist } from './mist.js';
 export { breeze } from './breeze.js';
 export { coastal } from './coastal.js';
+export { surf } from './surf.js';
 export { swell } from './swell.js';
 export { tropical } from './tropical.js';
 export { sunset } from './sunset.js';
@@ -42,6 +43,7 @@ import { dawn } from './dawn.js';
 import { mist } from './mist.js';
 import { breeze } from './breeze.js';
 import { coastal } from './coastal.js';
+import { surf } from './surf.js';
 import { swell } from './swell.js';
 import { tropical } from './tropical.js';
 import { sunset } from './sunset.js';
@@ -70,6 +72,7 @@ export const PRESETS = {
   mist: normalizePreset(mist),
   breeze: normalizePreset(breeze),
   coastal: normalizePreset(coastal),
+  surf: normalizePreset(surf),
   swell: normalizePreset(swell),
   tropical: normalizePreset(tropical),
   sunset: normalizePreset(sunset),

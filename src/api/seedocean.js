@@ -31,10 +31,11 @@ import { buildSpectrumParams } from '../core/fft/defaults.js';
 import { buildClipmapMesh } from '../core/clipmap.js';
 import { buildPatchMesh } from '../core/water-patch.js';
 import { buildRiverMesh, defaultRiverCenterline } from '../core/river-mesh.js';
-import { makeFbmHeight, makeBasinFn, makeRiverChannelHeight } from '../core/terrain.js';
+import { makeFbmHeight, makeBasinFn, makeRiverChannelHeight, makeBeachHeight } from '../core/terrain.js';
 import { bakeFlowMapForPreset } from '../core/flow-map.js';
 import { statsOf, spectrumStats } from '../core/stats.js';
 import { stateFromPreset } from '../state.js';
+import { waterTypeOf, usesPatchMesh, WATER } from '../core/water-types.js';
 
 export { PRESETS, DEFAULT_PRESET, PRESET_FORMAT, normalizePreset, resolvePreset };
 export { bakeFlowMapForPreset, normalizeFlowMapConfig, FLOWMAP_FORMAT, FlowMap } from '../core/flow-map.js';
@@ -188,14 +189,14 @@ export function describe(presetRef = null, folder = null) {
  * matches what the live renderer builds.
  */
 function buildSurfaceGeometry(preset) {
-  const waterType = preset.waterType ?? 'ocean';
-  if (waterType === 'pool' || waterType === 'lake') {
-    const patchDefaults = waterType === 'lake'
+  const waterType = waterTypeOf(preset);
+  if (usesPatchMesh(waterType)) {
+    const patchDefaults = waterType === WATER.LAKE
       ? { width: 80, length: 80, cells: 96, shape: 'circle', segments: 96 }
       : { width: 40, length: 40, cells: 64, shape: 'rect' };
     return buildPatchMesh(null, { ...patchDefaults, ...(preset.patch ?? {}) });
   }
-  if (waterType === 'river') {
+  if (waterType === WATER.RIVER) {
     const river = preset.river ?? {};
     const points = river.points ?? defaultRiverCenterline(river.length ?? 160, river.meander ?? 12);
     return buildRiverMesh(null, {
@@ -247,17 +248,30 @@ function makeTerrainHeightFn(preset, size, seed) {
       rimFalloff: t.rimFalloff ?? 1.5,
     });
   }
+  if (t.beach) {
+    return makeBeachHeight({
+      shoreZ: t.shoreZ ?? 0,
+      slope: t.slope ?? 0.085,
+      oceanFloor: t.oceanFloor ?? (preset.seafloorDepth ?? -22),
+      duneHeight: t.duneHeight ?? t.rimHeight ?? 7,
+      duneRun: t.duneRun ?? 55,
+      shoreNoise: t.shoreNoise ?? 4,
+      seed: seed ?? preset.seed ?? 1,
+      amplitude: t.amplitude ?? 1.4,
+      frequency: t.frequency ?? 0.018,
+      octaves: t.octaves ?? 4,
+    });
+  }
   return baseFn;
 }
 
 function terrainEnvelope(preset) {
-  const waterType = preset.waterType ?? 'ocean';
   const t = preset.terrain ?? {};
-  if (waterType !== 'lake' && waterType !== 'river') return null;
-  // Only meaningful when the preset actually asks for terrain relief.
-  if (!(t.basin || t.channel)) return null;
+  // Meaningful when the preset asks for terrain relief (basin / channel / beach).
+  if (!(t.basin || t.channel || t.beach)) return null;
   const size = t.size ?? 400;
   const hFn = makeTerrainHeightFn(preset, size, preset.seed);
+  if (!hFn) return null;
   let lo = Infinity, hi = -Infinity, count = 0;
   const samples = 33;
   for (let i = 0; i < samples; i++) {

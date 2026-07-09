@@ -20,6 +20,7 @@ import { PRESETS, DEFAULT_PRESET } from './presets/index.js';
 import { resolvePreset } from './presets/resolve.js';
 import { stateFromPreset } from './state.js';
 import { disposeOcean, disposeSeafloor, disposeDemoObject } from './core/dispose.js';
+import { waterTypeOf, isEnclosed, usesTerrain, WATER } from './core/water-types.js';
 
 const VERSION = '0.6.0-alpha';
 
@@ -107,9 +108,9 @@ export class SeedOcean {
     } else {
       // Bounded water uses a shorter far plane so distant sky/terrain edges
       // don't read as an ocean horizon. Ocean keeps 6000 for the open sea.
-      const waterType = this.preset.waterType ?? 'ocean';
-      const isBounded = waterType === 'pool' || waterType === 'lake' || waterType === 'river';
-      const far = this.preset.scene?.cameraFar ?? (isBounded ? 700 : 6000);
+      const waterType = waterTypeOf(this.preset);
+      const enclosed = isEnclosed(waterType);
+      const far = this.preset.scene?.cameraFar ?? (enclosed ? 700 : 6000);
       this.camera = new THREE.PerspectiveCamera(
         55,
         this.renderer.domElement.clientWidth / this.renderer.domElement.clientHeight || 1,
@@ -132,9 +133,8 @@ export class SeedOcean {
       // Bounded water hides the infinite sky dome — the horizon should read as
       // the enclosure (pool walls / valley hills / fog), not an ocean skyline.
       // preset.scene.sky defaults true for ocean, false for bounded water.
-      const waterType = this.preset.waterType ?? 'ocean';
-      const isBounded = waterType === 'pool' || waterType === 'lake' || waterType === 'river';
-      const skyOn = this.preset.scene?.sky ?? !isBounded;
+      const waterType = waterTypeOf(this.preset);
+      const skyOn = this.preset.scene?.sky ?? !isEnclosed(waterType);
       if (skyOn) {
         this.scene.add(this.env.sky);
       } else {
@@ -162,8 +162,8 @@ export class SeedOcean {
       // Bounded water (lake/river) gets displaced terrain as its basin/banks;
       // open water keeps the flat seafloor. Both expose the same handle shape
       // ({ mesh, updateUnderwater }) so update()/applyFogBlend are agnostic.
-      const waterType = this.preset.waterType ?? 'ocean';
-      if (waterType === 'lake' || waterType === 'river') {
+      const waterType = waterTypeOf(this.preset);
+      if (usesTerrain(waterType)) {
         this.seafloor = buildTerrain({
           preset: this.preset,
           sunDir: this.ocean.shading.sunDir,
@@ -171,7 +171,7 @@ export class SeedOcean {
           resolution: this.preset.terrain?.resolution ?? 128,
           seed: this.preset.seed,
         });
-      } else if (waterType === 'pool') {
+      } else if (waterType === WATER.POOL) {
         // Pool gets a full enclosure (deck + pool walls + tiled floor +
         // perimeter walls) instead of the 2400m flat seafloor.
         this.seafloor = buildPoolScene(this.preset, this.ocean.shading.sunDir);
@@ -225,10 +225,12 @@ export class SeedOcean {
     // crates at 12-18m radius). In a 25m pool they're absurdly out of scale,
     // and lake/river have their own context. Only spawn the buoy for bounded
     // water (it reads fine in all three).
-    const waterType = preset.waterType ?? 'ocean';
-    const isBounded = waterType === 'pool' || waterType === 'lake' || waterType === 'river';
-    const spawnBoat = !isBounded;
-    const spawnCrates = !isBounded;
+    const waterType = waterTypeOf(preset);
+    // Enclosed basins skip the open-water boat/crates; coast keeps them so the
+    // surf zone has something to push around.
+    const enclosed = isEnclosed(waterType);
+    const spawnBoat = !enclosed;
+    const spawnCrates = !enclosed;
 
     const buoyMat = createSubmergedMaterial(
       0xff5533,
@@ -352,8 +354,8 @@ export class SeedOcean {
     this.ocean.updateClipmap(this.camera);
 
     // --- Rebuild seafloor / terrain / pool enclosure ---
-    const waterType = this.preset.waterType ?? 'ocean';
-    if (waterType === 'lake' || waterType === 'river') {
+    const waterType = waterTypeOf(this.preset);
+    if (usesTerrain(waterType)) {
       this.seafloor = buildTerrain({
         preset: this.preset,
         sunDir: this.ocean.shading.sunDir,
@@ -361,7 +363,7 @@ export class SeedOcean {
         resolution: this.preset.terrain?.resolution ?? 128,
         seed: this.preset.seed,
       });
-    } else if (waterType === 'pool') {
+    } else if (waterType === WATER.POOL) {
       this.seafloor = buildPoolScene(this.preset, this.ocean.shading.sunDir);
     } else {
       this.seafloor = buildSeafloor(this.preset, this.ocean.shading.sunDir);
@@ -406,9 +408,9 @@ export class SeedOcean {
    */
   _applySceneBackdrop() {
     if (!this.env) return;
-    const waterType = this.preset.waterType ?? 'ocean';
-    const isBounded = waterType === 'pool' || waterType === 'lake' || waterType === 'river';
-    const skyOn = this.preset.scene?.sky ?? !isBounded;
+    const waterType = waterTypeOf(this.preset);
+    const enclosed = isEnclosed(waterType);
+    const skyOn = this.preset.scene?.sky ?? !enclosed;
     this.env.sky.visible = skyOn;
     if (skyOn) {
       this.scene.background = null;
@@ -419,7 +421,7 @@ export class SeedOcean {
     // Camera far plane: bounded water uses a tighter far so distant geometry
     // doesn't read as an ocean horizon.
     if (this._ownsCamera) {
-      this.camera.far = this.preset.scene?.cameraFar ?? (isBounded ? 700 : 6000);
+      this.camera.far = this.preset.scene?.cameraFar ?? (enclosed ? 700 : 6000);
       this.camera.updateProjectionMatrix();
     }
   }

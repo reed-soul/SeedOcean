@@ -19,6 +19,8 @@ import {
   LinearFilter,
   ClampToEdgeWrapping,
 } from 'three/webgpu';
+import { usesFlowMapAuto, waterTypeOf, WATER } from './water-types.js';
+import { makeBeachHeight } from './terrain.js';
 
 /** Schema tag for serialized flowmap payloads (future editor export). */
 export const FLOWMAP_FORMAT = 'seedocean-flowmap/1';
@@ -39,13 +41,14 @@ const decUnit = (b) => b / 255;
  *   worldExtent: number,
  *   shore: { enabled: boolean, waterLevel: number, bandWidth: number, foamStrength: number } | null,
  *   flowStrength: number,
+ *   surf: { breakDepth: number, breakWidth: number, foamStrength: number, rushSpeed: number } | null,
  * }}
  */
 export function normalizeFlowMapConfig(raw, preset = {}) {
-  const waterType = preset.waterType ?? 'ocean';
-  // Auto-enable for lake/river so shoreline foam works without every preset
-  // declaring an empty flowmap block. Ocean/pool stay off unless explicit.
-  const auto = waterType === 'lake' || waterType === 'river';
+  const waterType = waterTypeOf(preset);
+  // Auto-enable for lake/river/coast so shoreline foam works without every
+  // preset declaring an empty flowmap block. Ocean/pool stay off unless explicit.
+  const auto = usesFlowMapAuto(waterType);
   if (!raw && !auto) return null;
   if (raw === false) return null;
 
@@ -53,18 +56,43 @@ export function normalizeFlowMapConfig(raw, preset = {}) {
   const patchSpan = Math.max(preset.patch?.width ?? 0, preset.patch?.length ?? 0);
   const riverLen = preset.river?.length ?? 0;
   const terrainSize = preset.terrain?.size ?? 0;
-  const defaultExtent = waterType === 'river'
+  const defaultExtent = waterType === WATER.RIVER
     ? Math.max(riverLen, terrainSize * 0.4, 160)
-    : Math.max(patchSpan * 1.5, terrainSize * 0.25, 100);
+    : waterType === WATER.COAST
+      ? Math.max(terrainSize * 0.55, 220)
+      : Math.max(patchSpan * 1.5, terrainSize * 0.25, 100);
 
   const shoreRaw = cfg.shore;
-  const shoreEnabled = shoreRaw === false ? false : (auto || Boolean(shoreRaw) || shoreRaw === undefined);
+  const shoreEnabled = shoreRaw === false
+    ? false
+    : (auto || Boolean(shoreRaw) || shoreRaw === undefined);
+  const shoreDefaults = {
+    [WATER.RIVER]: { bandWidth: 3.5, foamStrength: 0.7 },
+    [WATER.COAST]: { bandWidth: 2.8, foamStrength: 1.05 },
+    [WATER.LAKE]: { bandWidth: 5, foamStrength: 0.9 },
+  };
+  const sd = shoreDefaults[waterType] ?? { bandWidth: 5, foamStrength: 0.9 };
   const shore = shoreEnabled
     ? {
         enabled: true,
         waterLevel: shoreRaw?.waterLevel ?? 0,
-        bandWidth: shoreRaw?.bandWidth ?? (waterType === 'river' ? 3.5 : 5),
-        foamStrength: shoreRaw?.foamStrength ?? (waterType === 'river' ? 0.7 : 0.9),
+        bandWidth: shoreRaw?.bandWidth ?? sd.bandWidth,
+        foamStrength: shoreRaw?.foamStrength ?? sd.foamStrength,
+      }
+    : null;
+
+  // Coastal surf band — nearshore breaking foam + onshore rush. Only for coast
+  // (or when an explicit surf block is provided on another type).
+  const surfRaw = cfg.surf;
+  const wantSurf = surfRaw === false
+    ? false
+    : (waterType === WATER.COAST || Boolean(surfRaw));
+  const surf = wantSurf
+    ? {
+        breakDepth: surfRaw?.breakDepth ?? 2.5,
+        breakWidth: surfRaw?.breakWidth ?? 9,
+        foamStrength: surfRaw?.foamStrength ?? 1.2,
+        rushSpeed: surfRaw?.rushSpeed ?? 0.9,
       }
     : null;
 
@@ -74,6 +102,7 @@ export function normalizeFlowMapConfig(raw, preset = {}) {
     worldExtent: cfg.worldExtent ?? defaultExtent,
     shore,
     flowStrength: cfg.flowStrength ?? 1,
+    surf,
   };
 }
 
@@ -301,8 +330,8 @@ export class FlowMap {
   }
 
   /**
-   * Bake wet-shore foam from a terrain height query — for future coastal
-   * surf where the seafloor actually crosses the waterline. Lake/river use
+   * Bake wet-shore foam from a terrain height query — for coastal surf where
+   * the seafloor actually crosses the waterline. Lake/river use
    * bakeShoreRing / bakeShoreChannel instead (see those docs).
    *
    * @param {(x: number, z: number) => number} getHeight
@@ -326,6 +355,80 @@ export class FlowMap {
         const dist = Math.abs(h - waterLevel);
         if (dist >= bandWidth) continue;
         this.addShore(tx, tz, foamStrength * (1 - dist / bandWidth));
+      }
+    }
+  }
+
+  /**
+   * Coastal surf bake — white-water band where depth is in the breaking range,
+   * plus an onshore rush (flow toward +Z / inland) that fades offshore.
+   *
+   * Depth is −height for submerged cells (beach heightFn: ocean is negative).
+   * Foam peaks near `breakDepth` and falls off over `breakWidth`. Dry land
+   * (h > waterLevel) gets a thin wet-sand strip via the shore channel.
+   *
+   * @param {(x: number, z: number) => number} getHeight
+   * @param {{
+   *   waterLevel?: number,
+   *   breakDepth?: number,
+   *   breakWidth?: number,
+   *   foamStrength?: number,
+   *   rushSpeed?: number,
+   *   shoreBand?: number,
+   *   shoreFoam?: number,
+   * }} [opts]
+   */
+  bakeCoastalSurf(getHeight, {
+    waterLevel = 0,
+    breakDepth = 2.5,
+    breakWidth = 9,
+    foamStrength = 1.2,
+    rushSpeed = 0.9,
+    shoreBand = 2.4,
+    shoreFoam = 1.05,
+  } = {}) {
+    if (typeof getHeight !== 'function') return;
+    const { size, worldExtent } = this;
+    const half = worldExtent * 0.5;
+    const cell = worldExtent / size;
+    // Onshore unit direction in XZ (beach convention: +Z is inland).
+    const onshoreX = 0;
+    const onshoreZ = 1;
+
+    for (let tz = 0; tz < size; tz++) {
+      for (let tx = 0; tx < size; tx++) {
+        const x = -half + (tx + 0.5) * cell;
+        const z = -half + (tz + 0.5) * cell;
+        const h = getHeight(x, z);
+        const depth = waterLevel - h; // >0 underwater, <0 dry
+
+        let foam = 0;
+        let speed = 0;
+
+        if (depth > 0) {
+          // Breaking band: peak when depth ≈ breakDepth, fall off over breakWidth.
+          // Squared falloff keeps the white-water strip narrow (not a fog bank).
+          const dist = Math.abs(depth - breakDepth);
+          if (dist < breakWidth) {
+            const w = 1 - dist / breakWidth;
+            const shallowBias = depth < breakDepth ? 1.2 : 0.75;
+            foam = Math.min(1, foamStrength * w * w * w * shallowBias);
+          }
+          // Rush: only inside the surf zone (depth < breakDepth + breakWidth).
+          const rushFade = Math.max(0, 1 - depth / (breakDepth + breakWidth));
+          speed = rushSpeed * rushFade * rushFade;
+        } else {
+          // Wet sand / swash above the still-water line.
+          const above = -depth;
+          if (above < shoreBand) {
+            foam = shoreFoam * (1 - above / shoreBand) * 0.9;
+            speed = rushSpeed * 0.3 * (1 - above / shoreBand);
+          }
+        }
+
+        if (foam > 0.02 || speed > 0.02) {
+          this.setTexel(tx, tz, onshoreX, onshoreZ, speed, foam);
+        }
       }
     }
   }
@@ -422,12 +525,87 @@ export class FlowMap {
 }
 
 /**
+ * Build the beach heightFn used by coastal FlowMap bakes — mirrors
+ * buildTerrain's terrain.beach branch so headless coverage matches the live mesh.
+ * @param {object} preset
+ * @returns {((x: number, z: number) => number) | null}
+ */
+export function makeCoastHeightFn(preset) {
+  const t = preset.terrain ?? {};
+  if (!t.beach && waterTypeOf(preset) !== WATER.COAST) return null;
+  return makeBeachHeight({
+    shoreZ: t.shoreZ ?? 0,
+    slope: t.slope ?? 0.085,
+    oceanFloor: t.oceanFloor ?? (preset.seafloorDepth ?? -22),
+    duneHeight: t.duneHeight ?? t.rimHeight ?? 7,
+    duneRun: t.duneRun ?? 55,
+    shoreNoise: t.shoreNoise ?? 4,
+    seed: preset.seed ?? 1,
+    amplitude: t.amplitude ?? 1.4,
+    frequency: t.frequency ?? 0.018,
+    octaves: t.octaves ?? 4,
+  });
+}
+
+/**
+ * Populate an existing FlowMap from a preset (does not upload). Used by
+ * bakeFlowMapForPreset (fresh map) and rebakeFlowMap (in-place rewrite).
+ * @param {FlowMap} map
+ * @param {object} preset
+ * @param {ReturnType<typeof normalizeFlowMapConfig>} cfg
+ */
+export function populateFlowMap(map, preset, cfg) {
+  if (!cfg) return;
+  map.clear();
+  const type = waterTypeOf(preset);
+
+  if (type === WATER.RIVER && preset.river?.points?.length >= 2) {
+    map.bakeRiverFlow(preset.river.points, {
+      width: preset.river.width ?? 14,
+      speedScale: cfg.flowStrength,
+    });
+  } else if (type === WATER.COAST) {
+    const hFn = makeCoastHeightFn(preset);
+    if (hFn && cfg.surf) {
+      map.bakeCoastalSurf(hFn, {
+        waterLevel: cfg.shore?.waterLevel ?? 0,
+        breakDepth: cfg.surf.breakDepth,
+        breakWidth: cfg.surf.breakWidth,
+        foamStrength: cfg.surf.foamStrength,
+        rushSpeed: cfg.surf.rushSpeed * cfg.flowStrength,
+        shoreBand: cfg.shore?.bandWidth ?? 2.8,
+        shoreFoam: cfg.shore?.foamStrength ?? 1.05,
+      });
+    } else if (hFn && cfg.shore?.enabled) {
+      map.bakeShoreFromHeight(hFn, cfg.shore);
+    }
+  } else if (preset.flow) {
+    const [fx, fz] = preset.flow.dir;
+    map.bakeUniformFlow(fx, fz, cfg.flowStrength);
+  }
+
+  if (cfg.shore?.enabled && type !== WATER.COAST) {
+    if (type === WATER.LAKE) {
+      const radius = (preset.patch?.width ?? 80) * 0.5;
+      map.bakeShoreRing(radius, cfg.shore);
+    } else if (type === WATER.RIVER && preset.river?.points?.length >= 2) {
+      map.bakeShoreChannel(preset.river.points, {
+        width: preset.river.width ?? 14,
+        bandWidth: cfg.shore.bandWidth,
+        foamStrength: cfg.shore.foamStrength,
+      });
+    }
+  }
+}
+
+/**
  * Run the standard bake pipeline for a preset. Pure CPU — safe in Node.
  * Returns a FlowMap, or null when the preset has no flowmap config.
  *
- * Shore foam is baked from the *water mesh edge* (lake disc radius / river
- * channel width), not from terrain height — lake basins sit well below y=0
- * under the disc, so a waterline-crossing test would flood the whole floor.
+ * Shore foam:
+ *   lake  → disc-edge ring (mesh boundary; basin floor stays below y=0)
+ *   river → channel-edge band
+ *   coast → depth-based surf break + wet-sand strip (beach crosses y=0)
  *
  * @param {object} preset
  * @returns {FlowMap | null}
@@ -437,31 +615,7 @@ export function bakeFlowMapForPreset(preset) {
   if (!cfg) return null;
 
   const map = new FlowMap(cfg.size, cfg.worldExtent);
-  const waterType = preset.waterType ?? 'ocean';
-
-  if (waterType === 'river' && preset.river?.points?.length >= 2) {
-    map.bakeRiverFlow(preset.river.points, {
-      width: preset.river.width ?? 14,
-      speedScale: cfg.flowStrength,
-    });
-  } else if (preset.flow) {
-    const [fx, fz] = preset.flow.dir;
-    map.bakeUniformFlow(fx, fz, cfg.flowStrength);
-  }
-
-  if (cfg.shore?.enabled) {
-    if (waterType === 'lake') {
-      const radius = (preset.patch?.width ?? 80) * 0.5;
-      map.bakeShoreRing(radius, cfg.shore);
-    } else if (waterType === 'river' && preset.river?.points?.length >= 2) {
-      map.bakeShoreChannel(preset.river.points, {
-        width: preset.river.width ?? 14,
-        bandWidth: cfg.shore.bandWidth,
-        foamStrength: cfg.shore.foamStrength,
-      });
-    }
-  }
-
+  populateFlowMap(map, preset, cfg);
   map.upload();
   return map;
 }

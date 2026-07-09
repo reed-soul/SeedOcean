@@ -172,6 +172,69 @@ export function makeRiverChannelHeight(points, {
 }
 
 /**
+ * Coastal beach height: a cross-shore slope that crosses y=0 at `shoreZ`, with
+ * mild along-shore fBm so the waterline isn't a ruler-straight line.
+ *
+ * Convention (matches the Coastal Surf preset):
+ *   z < shoreZ  → ocean (negative heights, deepening offshore)
+ *   z ≈ shoreZ  → waterline
+ *   z > shoreZ  → dunes / dry land (positive heights)
+ *
+ * Unlike lake basins (floor stays ~−6 m under the disc), this profile *does*
+ * cross the waterline — so FlowMap.bakeShoreFromHeight / bakeCoastalSurf are
+ * the correct shore bakers.
+ *
+ * @param {object} [opts]
+ * @param {number} [opts.shoreZ=0]         waterline Z in world meters
+ * @param {number} [opts.slope=0.085]      rise per meter of cross-shore distance
+ * @param {number} [opts.oceanFloor=-22]   deep-water clamp
+ * @param {number} [opts.duneHeight=7]     land-side peak scale
+ * @param {number} [opts.duneRun=55]       meters inland to reach duneHeight
+ * @param {number} [opts.shoreNoise=4]     along-shore waterline wander (meters)
+ * @param {number} [opts.seed=1]
+ * @param {number} [opts.amplitude=1.4]    fBm relief amplitude
+ * @param {number} [opts.frequency=0.018]
+ * @param {number} [opts.octaves=4]
+ */
+export function makeBeachHeight({
+  shoreZ = 0,
+  slope = 0.085,
+  oceanFloor = -22,
+  duneHeight = 7,
+  duneRun = 55,
+  shoreNoise = 4,
+  seed = 1,
+  amplitude = 1.4,
+  frequency = 0.018,
+  octaves = 4,
+} = {}) {
+  const relief = makeFbmHeight({ seed, amplitude, frequency, octaves });
+  // A second, lower-frequency sampler warps the waterline along X so the beach
+  // reads as a natural cove rather than a straight cut.
+  const warp = makeFbmHeight({
+    seed: seed + 91,
+    amplitude: shoreNoise,
+    frequency: frequency * 0.45,
+    octaves: 3,
+  });
+
+  /** @param {number} x @param {number} z */
+  return function beachAt(x, z) {
+    const localShore = shoreZ + warp(x, shoreZ);
+    const cross = z - localShore; // −offshore, +inland
+    const r = relief(x, z);
+    if (cross < 0) {
+      // Ocean: linear deepen, clamp to floor; light relief so the bed isn't flat.
+      return Math.max(oceanFloor, cross * slope) + r * 0.12;
+    }
+    // Land: climb toward dunes over duneRun meters.
+    const t = THREE.MathUtils.smoothstep(0, duneRun, cross);
+    const beachFace = cross * slope;
+    return beachFace * (1 - t * 0.35) + duneHeight * t + r * 0.55;
+  };
+}
+
+/**
  * @param {object} opts
  * @param {number} [opts.size=400]                 square world extent, meters
  * @param {number} [opts.resolution=128]           subdivisions per side
@@ -195,6 +258,8 @@ export function buildTerrain({
   // sits in a lake basin: flat-ish at the center, rising toward the rim.
   // When terrain.channel is set we wrap it in a river-channel profile instead
   // (bed along a Catmull-Rom centerline, banks rising on each side).
+  // When terrain.beach is set we build a cross-shore coastal slope that crosses
+  // the waterline (FlowMap height-based shore bake depends on this).
   const baseFn = heightFn ?? makeFbmHeight({
     seed: seed ?? preset.seed ?? 1,
     amplitude: terrainCfg.amplitude ?? 8,
@@ -222,6 +287,19 @@ export function buildTerrain({
       basinFloor: terrainCfg.basinFloor ?? (preset.seafloorDepth ?? -6),
       rimHeight: terrainCfg.rimHeight ?? (terrainCfg.amplitude ?? 8),
       rimFalloff: terrainCfg.rimFalloff ?? 1.5,
+    });
+  } else if (terrainCfg.beach) {
+    hFn = makeBeachHeight({
+      shoreZ: terrainCfg.shoreZ ?? 0,
+      slope: terrainCfg.slope ?? 0.085,
+      oceanFloor: terrainCfg.oceanFloor ?? (preset.seafloorDepth ?? -22),
+      duneHeight: terrainCfg.duneHeight ?? terrainCfg.rimHeight ?? 7,
+      duneRun: terrainCfg.duneRun ?? 55,
+      shoreNoise: terrainCfg.shoreNoise ?? 4,
+      seed: seed ?? preset.seed ?? 1,
+      amplitude: terrainCfg.amplitude ?? 1.4,
+      frequency: terrainCfg.frequency ?? 0.018,
+      octaves: terrainCfg.octaves ?? 4,
     });
   } else {
     hFn = baseFn;

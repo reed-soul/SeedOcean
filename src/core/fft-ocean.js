@@ -3,13 +3,14 @@
 // bounded water (pool/lake) — selected by preset.waterType.
 
 import { WakeField } from './wake-field.js';
-import { bakeFlowMapForPreset } from './flow-map.js';
+import { bakeFlowMapForPreset, normalizeFlowMapConfig, populateFlowMap } from './flow-map.js';
 import { OceanSimulator } from './fft/ocean-simulator.js';
 import { createFFTSurfaceMaterial, createShadingUniforms, applyShadingUniforms } from './fft/surface-material.js';
 import { buildSpectrumParams } from './fft/defaults.js';
 import { buildClipmapMesh } from './clipmap.js';
 import { buildPatchMesh } from './water-patch.js';
 import { buildRiverMesh, defaultRiverCenterline } from './river-mesh.js';
+import { waterTypeOf, usesPatchMesh, WATER } from './water-types.js';
 
 /**
  * @param {import('three/webgpu').WebGPURenderer} renderer
@@ -39,19 +40,21 @@ export async function buildFFTOcean(renderer, preset, state, quality = 'perf') {
     flowMap,
   );
 
-  // Select mesh by water type. Both builders return { root, mesh, update, ... }
+  // Select mesh by water type. Builders return { root, mesh, update, ... }
   // and the surface shader is mesh-agnostic (samples positionLocal.xz + clipOrigin).
-  const waterType = preset.waterType ?? 'ocean';
+  // Coast uses the open-ocean clipmap — the beach is the terrain seafloor, not
+  // a finite water patch (waves must continue past the waterline into the bay).
+  const waterType = waterTypeOf(preset);
   let surface;
-  if (waterType === 'pool' || waterType === 'lake') {
+  if (usesPatchMesh(waterType)) {
     // Lakes default to a circular disc so the shoreline reads as a basin;
     // pools stay rectangular. preset.patch can override shape explicitly.
-    const patchDefaults = waterType === 'lake'
+    const patchDefaults = waterType === WATER.LAKE
       ? { width: 80, length: 80, cells: 96, shape: 'circle', segments: 96 }
       : { width: 40, length: 40, cells: 64, shape: 'rect' };
     surface = buildPatchMesh(material, { ...patchDefaults, ...(preset.patch ?? {}) });
     // Bounded water: clipOrigin stays at (0,0); patch vertices are local-to-origin.
-  } else if (waterType === 'river') {
+  } else if (waterType === WATER.RIVER) {
     // Ribbon mesh extruded along a Catmull-Rom centerline. Flow scrolling is
     // driven by FlowMap (per-texel river tangents) with preset.flow as the
     // base speed the map's B channel scales.
@@ -142,34 +145,12 @@ export async function buildFFTOcean(renderer, preset, state, quality = 'perf') {
  * @param {object} preset
  */
 function rebakeFlowMap(flowMap, preset) {
-  flowMap.clear();
-  const waterType = preset.waterType ?? 'ocean';
-  const strength = preset.flowmap?.flowStrength ?? 1;
-  const shore = preset.flowmap?.shore;
-  const wantShore = shore !== false && (waterType === 'lake' || waterType === 'river' || Boolean(shore));
-
-  if (waterType === 'river' && preset.river?.points?.length >= 2) {
-    flowMap.bakeRiverFlow(preset.river.points, {
-      width: preset.river.width ?? 14,
-      speedScale: strength,
-    });
-  } else if (preset.flow) {
-    const [fx, fz] = preset.flow.dir;
-    flowMap.bakeUniformFlow(fx, fz, strength);
+  const cfg = normalizeFlowMapConfig(preset.flowmap, preset);
+  if (!cfg) {
+    flowMap.clear();
+    flowMap.upload();
+    return;
   }
-
-  if (wantShore) {
-    const bandWidth = shore?.bandWidth ?? (waterType === 'river' ? 3.5 : 5);
-    const foamStrength = shore?.foamStrength ?? (waterType === 'river' ? 0.7 : 0.9);
-    if (waterType === 'lake') {
-      flowMap.bakeShoreRing((preset.patch?.width ?? 80) * 0.5, { bandWidth, foamStrength });
-    } else if (waterType === 'river' && preset.river?.points?.length >= 2) {
-      flowMap.bakeShoreChannel(preset.river.points, {
-        width: preset.river.width ?? 14,
-        bandWidth,
-        foamStrength,
-      });
-    }
-  }
+  populateFlowMap(flowMap, preset, cfg);
   flowMap.upload();
 }

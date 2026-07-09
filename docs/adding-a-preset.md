@@ -46,6 +46,7 @@ registry construction so the on-disk files stay clean.
 | `'pool'` | `pool?: {…}`, `patch?: {…}` | Rectangular patch + tiled enclosure. |
 | `'lake'` | `patch`, `terrain: { basin: true, … }`, `flowmap?`, `fog?`, `scene?` | Circular disc in an fBm basin. Shore foam auto-bakes. |
 | `'river'` | `flow`, `river: { points, width, … }`, `terrain: { channel: true, … }`, `flowmap?` | Ribbon mesh + directional current. |
+| `'coast'` | `terrain: { beach: true, … }`, `flowmap: { surf: {…} }`, `flow?` | Clipmap + beach slope; depth-based white water. |
 
 See `docs/sea-states.md` for the Signature of every shipping preset, and
 `src/core/flow-map.js` for the `seedocean-flowmap/1` channel contract.

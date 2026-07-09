@@ -4,7 +4,7 @@
 
 **Open-source FFT ocean system for Three.js — WebGPU first, WebGL2 fallback.**
 
-Persistent foam · 19 sea-state presets · buoyancy · underwater · spray & rain · TypeScript · `<water-canvas>`.
+Persistent foam · 20 sea-state presets · buoyancy · underwater · spray & rain · TypeScript · `<water-canvas>`.
 
 [![CI](https://github.com/reed-soul/SeedOcean/actions/workflows/ci.yml/badge.svg)](https://github.com/reed-soul/SeedOcean/actions/workflows/ci.yml)
 [![Live demo](https://img.shields.io/badge/demo-GitHub%20Pages-0a5f7a)](https://reed-soul.github.io/SeedOcean/)
@@ -36,12 +36,12 @@ Persistent foam · 19 sea-state presets · buoyancy · underwater · spray & rai
   <tr>
     <td width="25%"><sub>Mountain Lake</sub><br><img src="docs/assets/presets/lake.webp"></td>
     <td width="25%"><sub>River (flow)</sub><br><img src="docs/assets/presets/river.webp"></td>
-    <td width="25%"></td>
+    <td width="25%"><sub>Coastal Surf</sub><br><em>beach + white water</em></td>
     <td width="25%"></td>
   </tr>
 </table>
 
-> **Status: `v0.6.0-alpha`.** Nineteen presets — realistic day/night/tropical/polar/bioluminescent, cel-shaded **Cartoon** and **Ink Wash** stylized modes, and three bounded water types each in their own self-contained scene (not floating in an ocean): a tiled **Pool** enclosure, a **Mountain Lake** ringed by procedural fBm valley terrain with wet-shore foam, and a meandering **River** in a Catmull-Rom gorge with directional FlowMap current. FFT ocean with persistent/advected foam, a 256² quality mode, TypeScript types, a `<water-canvas>` web component, atmospheric spray + rain, a headless Design API (`seedocean/api`), and a WebGL2/Gerstner fallback that keeps the API identical when WebGPU is unavailable.
+> **Status: `v0.6.0-alpha`.** Twenty presets — realistic day/night/tropical/polar/bioluminescent, cel-shaded **Cartoon** and **Ink Wash** stylized modes, three bounded water types (tiled **Pool**, **Mountain Lake**, meandering **River**), and **Coastal Surf** (clipmap ocean meeting a sloping beach with depth-based white water). FFT ocean with persistent/advected foam, a 256² quality mode, TypeScript types, a `<water-canvas>` web component, atmospheric spray + rain, a headless Design API (`seedocean/api`), and a WebGL2/Gerstner fallback that keeps the API identical when WebGPU is unavailable.
 
 ## Live demo
 
@@ -82,7 +82,7 @@ const ocean = await SeedOcean.create({
   renderer,
   scene,
   camera,
-  preset: 'coastal',   // any of the 19 presets
+  preset: 'coastal',   // any of the 20 presets
   quality: 'quality',  // 'perf' (128²) | 'quality' (256²)
 });
 
@@ -130,8 +130,8 @@ Re-exports: `PRESETS`, `buildFFTOcean`, `BuoyancySampler`, `validateFFT`, …
 - **Shared caustics** — sea floor, buoy, boat hull, floating crates
 - **Atmosphere** — wind-blown sea spray at breaking crests + a screen rain layer (zero-cost when intensity is 0)
 - **WebGL2 fallback** — when WebGPU is unavailable, a Gerstner-wave renderer keeps the same API and visual identity
-- **19 presets** — Calm Bay · Dawn Glass · Sea Mist · Light Breeze · Coastal Chop · Long Swell · **Tropical Reef** · Golden Sunset · **Moonlit** · **Arctic** · **Bioluminescent** · **Cartoon** · **Ink Wash** · **Pool** · **Mountain Lake** · **River** · Gale · Open Storm · Tempest
-- **FlowMap** — spatially-varying flow + wet-shore foam (`seedocean-flowmap/1`) for lake/river
+- **20 presets** — Calm Bay · Dawn Glass · Sea Mist · Light Breeze · Coastal Chop · **Coastal Surf** · Long Swell · **Tropical Reef** · Golden Sunset · **Moonlit** · **Arctic** · **Bioluminescent** · **Cartoon** · **Ink Wash** · **Pool** · **Mountain Lake** · **River** · Gale · Open Storm · Tempest
+- **FlowMap** — spatially-varying flow + wet-shore foam (`seedocean-flowmap/1`) for lake/river/coast
 - **Headless Design API** — `describe` / `design` / `toPreset` / `fromPreset` (no GPU)
 - **TypeScript types** + **`<water-canvas>` web component** + **glTF export**
 
@@ -167,7 +167,7 @@ pnpm capture        # regenerate docs/assets screenshots + GIF
 | 9 ✅ | River preset: directional flow + Catmull-Rom ribbon + buoyancy current |
 | 10 ✅ | Bounded-water scene enclosures (pool / lake valley / river gorge) + headless Design API |
 | 11a/b ✅ | FlowMap contract (`seedocean-flowmap/1`) + runtime sampling (river tangents, wet-shore foam) |
-| 11c 🔜 | Coastal Surf — near-shore breaking + tidal band |
+| 11c ✅ | Coastal Surf — beach terrain + depth-based breaking foam + onshore rush |
 | 11d 🔜 | Shoreline editor / flowmap painter (demo brush → preset export) |
 
 ## Layout
@@ -185,7 +185,7 @@ src/
   core/atmosphere.js  spray + rain
   core/wake-field.js  CPU wake texture
   core/caustics.js    shared underwater caustic pattern
-  presets/            19 named sea states
+  presets/            20 named sea states
 ```
 
 ## Docs

@@ -91,11 +91,11 @@ export interface Preset {
   /** Future-proofing for stages not yet on every preset. */
   rainIntensity?: number;
   sprayIntensity?: number;
-  /** Water mesh type — selects clipmap vs bounded patch vs terrain basin. */
-  waterType?: 'ocean' | 'pool' | 'lake' | 'river';
+  /** Water mesh type — selects clipmap vs bounded patch vs terrain basin / beach. */
+  waterType?: 'ocean' | 'pool' | 'lake' | 'river' | 'coast';
   /** Bounded-water patch dimensions (pool/lake). */
   patch?: { width: number; length: number; cells: number; shape?: 'rect' | 'circle'; segments?: number };
-  /** Terrain basin config (lake/river) — passed to buildTerrain. */
+  /** Terrain basin / channel / beach config — passed to buildTerrain. */
   terrain?: {
     size?: number;
     resolution?: number;
@@ -113,6 +113,14 @@ export interface Preset {
     bankHeight?: number;
     bankFalloff?: number;
     points?: number[][];
+    /** Coastal beach mode: cross-shore slope that crosses the waterline. */
+    beach?: boolean;
+    shoreZ?: number;
+    slope?: number;
+    oceanFloor?: number;
+    duneHeight?: number;
+    duneRun?: number;
+    shoreNoise?: number;
   };
   /** Pool enclosure config (deck/walls/floor colors + dimensions). */
   pool?: {
@@ -146,6 +154,13 @@ export interface Preset {
       waterLevel?: number;
       bandWidth?: number;
       foamStrength?: number;
+    };
+    /** Coastal surf break band (depth-based white water + onshore rush). */
+    surf?: false | {
+      breakDepth?: number;
+      breakWidth?: number;
+      foamStrength?: number;
+      rushSpeed?: number;
     };
   };
   /** River ribbon mesh config (Catmull-Rom centerline + width). */
@@ -310,7 +325,7 @@ export interface SeafloorHandle {
   updateUnderwater: (mix: number) => void;
 }
 
-/** Displaced terrain basin returned by {@link buildTerrain} (lake/river). */
+/** Displaced terrain returned by {@link buildTerrain} (lake/river/coast). */
 export interface TerrainHandle extends SeafloorHandle {
   /** CPU-side height query at world XZ, clamped to the terrain square. */
   getHeight: (x: number, z: number) => number;
@@ -395,6 +410,15 @@ export declare class FlowMap {
   bakeShoreFromHeight(getHeight: (x: number, z: number) => number, opts?: {
     waterLevel?: number; bandWidth?: number; foamStrength?: number;
   }): void;
+  bakeCoastalSurf(getHeight: (x: number, z: number) => number, opts?: {
+    waterLevel?: number;
+    breakDepth?: number;
+    breakWidth?: number;
+    foamStrength?: number;
+    rushSpeed?: number;
+    shoreBand?: number;
+    shoreFoam?: number;
+  }): void;
   paint(x: number, z: number, dirX: number, dirZ: number, speed?: number, shore?: number, radius?: number): void;
   sample(x: number, z: number): { dirX: number; dirZ: number; speed: number; shore: number };
   stats(): FlowMapStats;
@@ -411,9 +435,16 @@ export declare function normalizeFlowMapConfig(
   worldExtent: number;
   shore: { enabled: boolean; waterLevel: number; bandWidth: number; foamStrength: number } | null;
   flowStrength: number;
+  surf: { breakDepth: number; breakWidth: number; foamStrength: number; rushSpeed: number } | null;
 } | null;
 
 export declare function bakeFlowMapForPreset(preset: Preset): FlowMap | null;
+export declare function populateFlowMap(
+  map: FlowMap,
+  preset: Preset,
+  cfg: NonNullable<ReturnType<typeof normalizeFlowMapConfig>>,
+): void;
+export declare function makeCoastHeightFn(preset: Preset): ((x: number, z: number) => number) | null;
 
 export interface AtmosphereHandle {
   group: THREE.Group;
@@ -462,6 +493,20 @@ export declare function makeRiverChannelHeight(points: number[][], opts?: {
   bankHeight?: number;
   bankFalloff?: number;
   bedDepth?: number;
+  seed?: number;
+  amplitude?: number;
+  frequency?: number;
+  octaves?: number;
+}): (x: number, z: number) => number;
+
+/** Coastal beach height: cross-shore slope that crosses the waterline. */
+export declare function makeBeachHeight(opts?: {
+  shoreZ?: number;
+  slope?: number;
+  oceanFloor?: number;
+  duneHeight?: number;
+  duneRun?: number;
+  shoreNoise?: number;
   seed?: number;
   amplitude?: number;
   frequency?: number;

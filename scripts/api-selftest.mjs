@@ -27,13 +27,15 @@ function ok(label) {
 console.log('Design API');
 
 const presets = listPresets();
-assert.equal(presets.length, 19);
+assert.equal(presets.length, 20);
 assert.ok(presets.every((p) => p.key && p.name && p.waterType));
+assert.ok(presets.some((p) => p.key === 'surf' && p.waterType === 'coast'));
 ok(`listPresets → ${presets.length}`);
 
 const menu = describe();
 assert.match(menu, /SeedOcean presets/);
 assert.match(menu, /coastal/);
+assert.match(menu, /surf/);
 ok('describe() menu');
 
 const coastalSchema = getSchema('coastal');
@@ -65,6 +67,15 @@ assert.ok(river.flowmap);
 assert.ok(river.flowmap.flowCoverage > 0.02);
 assert.ok(river.flowmap.shoreCoverage > 0.01);
 ok(`design(river) flow=${river.flowmap.flowCoverage} shore=${river.flowmap.shoreCoverage}`);
+
+const surf = design({ preset: 'surf' });
+assert.equal(surf.preset.waterType, 'coast');
+assert.ok(surf.terrain);
+assert.ok(surf.terrain.minHeight < 0 && surf.terrain.maxHeight > 0, 'beach crosses waterline');
+assert.ok(surf.flowmap);
+assert.ok(surf.flowmap.shoreCoverage > 0.1 && surf.flowmap.shoreCoverage < 0.55);
+assert.ok(surf.flowmap.flowCoverage > 0.1);
+ok(`design(surf) shore=${surf.flowmap.shoreCoverage} flow=${surf.flowmap.flowCoverage} terrain=[${surf.terrain.minHeight},${surf.terrain.maxHeight}]`);
 
 const json = toPreset({ preset: 'coastal', seed: 42, controls: { waveAmp: 1.5 } });
 assert.equal(json.format, PRESET_FORMAT);
@@ -108,6 +119,18 @@ const bank = riverMap.sample(0, -4.94 + 7);
 assert.ok(bank.shore > 0.3, `bank shore=${bank.shore}`);
 riverMap.dispose();
 ok('river flow follows centerline + shore at channel edge');
+
+const surfMap = bakeFlowMapForPreset(PRESETS.surf);
+assert.ok(surfMap);
+const deep = surfMap.sample(0, -80);
+const near = surfMap.sample(0, 0);
+const dry = surfMap.sample(0, 50);
+assert.ok(deep.shore < 0.1, `deep foam=${deep.shore}`);
+assert.ok(near.shore > 0.5, `nearshore foam=${near.shore}`);
+assert.ok(dry.shore < 0.05, `dune foam=${dry.shore}`);
+assert.ok(near.speed > deep.speed, 'rush stronger near shore than deep');
+surfMap.dispose();
+ok('coastal surf: white water near shore, quiet offshore');
 
 assert.equal(bakeFlowMapForPreset(PRESETS.coastal), null);
 assert.equal(bakeFlowMapForPreset(PRESETS.pool), null);
