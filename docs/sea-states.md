@@ -143,7 +143,24 @@
 | FlowMap | Off | Off | Shore ring | Tangents + shore | Depth break + swash |
 | Demo boat/crates | Yes | Buoy only | Buoy only | Buoy only | Yes |
 
-**Not yet:** — Phase 11 complete. Next: demo-object factory decoupling, Coastal Surf media capture.
+**Not yet:** — Phase 11 complete. Next: comment-style guide; live WebGPU re-capture of `surf.webp` when a GPU is available (`pnpm capture:preset surf`).
+
+## Demo objects
+
+`demoObjects` on `SeedOcean.create` accepts:
+
+| Value | Behaviour |
+|-------|-----------|
+| `false` / omit | No props |
+| `true` | Default factory — buoy only in enclosed basins; buoy+boat+crates on ocean/coast |
+| `{ buoy?, boat?, crates?, buoyPosition?, cratePositions? }` | Toggle pieces |
+| `(ctx) => handle` | Full custom factory |
+
+```js
+await SeedOcean.create({
+  demoObjects: { buoy: true, boat: false, crates: false },
+});
+```
 
 ## Shoreline brush (demo)
 

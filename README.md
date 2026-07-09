@@ -36,7 +36,7 @@ Persistent foam · 20 sea-state presets · buoyancy · underwater · spray & rai
   <tr>
     <td width="25%"><sub>Mountain Lake</sub><br><img src="docs/assets/presets/lake.webp"></td>
     <td width="25%"><sub>River (flow)</sub><br><img src="docs/assets/presets/river.webp"></td>
-    <td width="25%"><sub>Coastal Surf</sub><br><em>beach + white water</em></td>
+    <td width="25%"><sub>Coastal Surf</sub><br><img src="docs/assets/presets/surf.webp"></td>
     <td width="25%"></td>
   </tr>
 </table>

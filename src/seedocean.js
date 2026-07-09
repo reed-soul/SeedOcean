@@ -8,13 +8,11 @@ import { validateFFT } from './core/fft/fft.js';
 import { buildEnvironment } from './core/environment.js';
 import { exportFFTOceanGLB } from './core/export-glb.js';
 import { BuoyancySampler } from './core/buoyancy.js';
-import { BuoyancySystem, BuoyancyBody } from './core/buoyancy-body.js';
+import { BuoyancySystem } from './core/buoyancy-body.js';
 import { buildSeafloor } from './core/seafloor.js';
 import { buildTerrain } from './core/terrain.js';
 import { buildPoolScene } from './core/pool-scene.js';
-import { buildBoat } from './core/boat.js';
 import { buildAtmosphere } from './core/atmosphere.js';
-import { createSubmergedMaterial } from './core/submerged-material.js';
 import { createUnderwaterPipeline } from './core/underwater-post.js';
 import { PRESETS, DEFAULT_PRESET } from './presets/index.js';
 import { resolvePreset } from './presets/resolve.js';
@@ -22,6 +20,7 @@ import { stateFromPreset } from './state.js';
 import { disposeOcean, disposeSeafloor, disposeDemoObject } from './core/dispose.js';
 import { waterTypeOf, isEnclosed, usesTerrain, WATER } from './core/water-types.js';
 import { normalizeFlowMapConfig, populateFlowMap } from './core/flow-map.js';
+import { resolveDemoObjects } from './core/demo-objects.js';
 import { PRESET_FORMAT, normalizePreset } from './presets/index.js';
 
 const VERSION = '0.6.0-alpha';
@@ -41,7 +40,8 @@ const BELOW_FOG = { color: 0x032838, density: 0.0032 };
  * @property {boolean} [seafloor=true]
  * @property {boolean} [underwater=true]
  * @property {boolean} [buoyancy=true]
- * @property {boolean} [demoObjects=false] — buoy, boat, crates
+ * @property {boolean|object|Function} [demoObjects=false] — true = default factory;
+ *   config `{ buoy?, boat?, crates? }`; or `(ctx) => handle` for full control
  * @property {boolean} [validateFFT=false]
  * @property {number} [fftGrid=128] — size used only by the FFT self-test
  * @property {'perf'|'quality'} [quality='perf'] — 128² vs 256² simulation grid
@@ -222,82 +222,16 @@ export class SeedOcean {
   }
 
   _buildDemoObjects() {
-    const { preset, scene, ocean, buoyancySystem, submergedMix } = this;
-    // The boat/crates are open-water demos sized for the ocean (5.5m hull,
-    // crates at 12-18m radius). In a 25m pool they're absurdly out of scale,
-    // and lake/river have their own context. Only spawn the buoy for bounded
-    // water (it reads fine in all three).
-    const waterType = waterTypeOf(preset);
-    // Enclosed basins skip the open-water boat/crates; coast keeps them so the
-    // surf zone has something to push around.
-    const enclosed = isEnclosed(waterType);
-    const spawnBoat = !enclosed;
-    const spawnCrates = !enclosed;
-
-    const buoyMat = createSubmergedMaterial(
-      0xff5533,
-      preset.causticColor ?? 0x3a8a9a,
-      ocean.shading.sunDir,
-      submergedMix,
-      { causticStrength: 0.65 },
-    );
-    this.buoy = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.35, 0.5, 1.2, 12),
-      buoyMat.material,
-    );
-    this.buoy.position.set(6, 0.6, -4);
-    this.buoy.name = 'Buoy';
-    scene.add(this.buoy);
-    buoyancySystem.add(new BuoyancyBody(this.buoy, {
-      buoyancyOffset: 0.75,
-      samples: [[0, 0]],
-      springK: 28,
-      damping: 6,
-    }));
-
-    const boatHullMat = createSubmergedMaterial(
-      0xc8d4dc,
-      preset.causticColor ?? 0x3a8a9a,
-      ocean.shading.sunDir,
-      submergedMix,
-      { causticStrength: 0.48, roughness: 0.45, metalness: 0.12 },
-    );
-    if (spawnBoat) {
-      this.boat = buildBoat(boatHullMat.material);
-      scene.add(this.boat);
-      buoyancySystem.add(new BuoyancyBody(this.boat, {
-        buoyancyOffset: 0.35,
-        samples: [[0, 0], [2.2, 0], [-2.2, 0], [0, 0.9], [0, -0.9]],
-        springK: 14,
-        damping: 4.5,
-        maxTilt: 0.22,
-      }));
-    }
-
-    this.crates = [];
-    if (spawnCrates) {
-      for (const [cx, cz] of [[12, -8], [-10, 14], [18, 6]]) {
-        const crateMat = createSubmergedMaterial(
-          0xc49a6c,
-          preset.causticColor ?? 0x3a8a9a,
-          ocean.shading.sunDir,
-          submergedMix,
-          { causticStrength: 0.5, roughness: 0.75 },
-        );
-        const crate = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 1.4), crateMat.material);
-        crate.position.set(cx, 0.7, cz);
-        crate.name = 'Crate';
-        scene.add(crate);
-        this.crates.push(crate);
-        buoyancySystem.add(new BuoyancyBody(crate, {
-          buoyancyOffset: 0.7,
-          samples: [[0, 0]],
-          springK: 32,
-          damping: 7,
-          maxTilt: 0.12,
-        }));
-      }
-    }
+    const handle = resolveDemoObjects(this.options.demoObjects, {
+      preset: this.preset,
+      scene: this.scene,
+      ocean: this.ocean,
+      buoyancySystem: this.buoyancySystem,
+      submergedMix: this.submergedMix,
+    });
+    this.buoy = handle?.buoy ?? null;
+    this.boat = handle?.boat ?? null;
+    this.crates = handle?.crates ?? null;
   }
 
   async applyPreset(idOrPreset, nextState) {

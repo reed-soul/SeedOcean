@@ -9,6 +9,8 @@ export { buildSeafloor } from './core/seafloor.js';
 export { buildTerrain, makeFbmHeight, makeRiverChannelHeight, makeBeachHeight } from './core/terrain.js';
 export { buildPoolScene } from './core/pool-scene.js';
 export { buildRiverMesh, defaultRiverCenterline } from './core/river-mesh.js';
+export { buildBoat } from './core/boat.js';
+export { resolveDemoObjects, buildDefaultDemoObjects } from './core/demo-objects.js';
 export { FlowMap, bakeFlowMapForPreset, normalizeFlowMapConfig, FLOWMAP_FORMAT } from './core/flow-map.js';
 export { WATER, waterTypeOf, usesTerrain, isEnclosed, usesFlowMapAuto, usesPatchMesh } from './core/water-types.js';
 export { attachShorelinePainter } from './ui/shoreline-painter.js';

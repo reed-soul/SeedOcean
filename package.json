@@ -56,7 +56,8 @@
     "preview": "vite preview --port 5391",
     "test:fft": "node scripts/fft-selftest.mjs",
     "test:api": "node scripts/api-selftest.mjs",
-    "capture": "node scripts/capture-media.mjs"
+    "capture": "node scripts/capture-media.mjs",
+    "capture:preset": "node scripts/capture-preset.mjs"
   },
   "peerDependencies": {
     "three": ">=0.184.0"

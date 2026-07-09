@@ -205,6 +205,33 @@ export interface OceanState {
   starsDensity: number;
 }
 
+export interface DemoObjectsConfig {
+  buoy?: boolean;
+  boat?: boolean;
+  crates?: boolean;
+  buoyPosition?: [number, number, number];
+  cratePositions?: Array<[number, number]>;
+}
+
+export interface DemoObjectsHandle {
+  buoy?: THREE.Object3D | null;
+  boat?: THREE.Object3D | null;
+  crates?: THREE.Object3D[];
+}
+
+export interface DemoObjectsContext {
+  preset: Preset;
+  scene: THREE.Scene;
+  ocean: FFTOceanHandle;
+  buoyancySystem?: BuoyancySystem;
+  submergedMix: { value: number };
+}
+
+export type DemoObjectsOption =
+  | boolean
+  | DemoObjectsConfig
+  | ((ctx: DemoObjectsContext) => DemoObjectsHandle | null);
+
 export interface SeedOceanOptions {
   container?: HTMLElement;
   renderer?: THREE.WebGPURenderer;
@@ -216,7 +243,11 @@ export interface SeedOceanOptions {
   seafloor?: boolean;
   underwater?: boolean;
   buoyancy?: boolean;
-  demoObjects?: boolean;
+  /**
+   * Demo buoyancy props. `true` = default waterType-aware factory;
+   * config object toggles pieces; factory fn for full control; `false`/omit = none.
+   */
+  demoObjects?: DemoObjectsOption;
   validateFFT?: boolean;
   fftGrid?: number;
   quality?: Quality;
@@ -543,6 +574,18 @@ export declare function buildPoolScene(
   preset?: Preset,
   sunDir?: { value: THREE.Vector3 },
 ): SeafloorHandle;
+
+export declare function resolveDemoObjects(
+  option: DemoObjectsOption | undefined,
+  ctx: DemoObjectsContext,
+): DemoObjectsHandle | null;
+
+export declare function buildDefaultDemoObjects(
+  ctx: DemoObjectsContext,
+  cfg?: DemoObjectsConfig,
+): DemoObjectsHandle;
+
+export declare function buildBoat(hullMaterial?: THREE.Material): THREE.Group;
 
 /** Default gently-meandering river centerline. */
 export declare function defaultRiverCenterline(length?: number, meander?: number): number[][];
