@@ -3,7 +3,7 @@
 // bounded water (pool/lake) — selected by preset.waterType.
 
 import { WakeField } from './wake-field.js';
-import { bakeFlowMapForPreset, normalizeFlowMapConfig, populateFlowMap } from './flow-map.js';
+import { FlowMap, bakeFlowMapForPreset, normalizeFlowMapConfig, populateFlowMap } from './flow-map.js';
 import { OceanSimulator } from './fft/ocean-simulator.js';
 import { createFFTSurfaceMaterial, createShadingUniforms, applyShadingUniforms } from './fft/surface-material.js';
 import { buildSpectrumParams } from './fft/defaults.js';
@@ -25,9 +25,14 @@ export async function buildFFTOcean(renderer, preset, state, quality = 'perf') {
 
   const wakeField = new WakeField(512, 220);
 
-  // FlowMap: bake river tangents + wet-shore foam on the CPU before the
-  // material binds the texture. Null for ocean/pool (no shoreline).
-  const flowMap = bakeFlowMapForPreset(preset);
+  // FlowMap: lake/river/coast bake content; ocean/pool stay null unless the
+  // preset embeds painter pixels. Opt out with `flowmap: false`. For the
+  // shoreline painter (11d) the demo always wants a map — allocate a blank
+  // one when bake returns null so strokes have a texture binding.
+  let flowMap = bakeFlowMapForPreset(preset);
+  if (!flowMap && preset.flowmap !== false) {
+    flowMap = new FlowMap(256, 220);
+  }
 
   const shading = createShadingUniforms(preset);
   applyShadingUniforms(shading, preset, state);
@@ -146,11 +151,9 @@ export async function buildFFTOcean(renderer, preset, state, quality = 'perf') {
  */
 function rebakeFlowMap(flowMap, preset) {
   const cfg = normalizeFlowMapConfig(preset.flowmap, preset);
-  if (!cfg) {
-    flowMap.clear();
-    flowMap.upload();
-    return;
-  }
-  populateFlowMap(flowMap, preset, cfg);
-  flowMap.upload();
+  if (cfg) populateFlowMap(flowMap, preset, cfg);
+  else flowMap.clear();
+  // Painter round-trip: embedded pixels override the procedural bake.
+  if (preset.flowmap?.pixels) flowMap.fromJSON(preset.flowmap);
+  else flowMap.upload();
 }

@@ -21,6 +21,8 @@ import { resolvePreset } from './presets/resolve.js';
 import { stateFromPreset } from './state.js';
 import { disposeOcean, disposeSeafloor, disposeDemoObject } from './core/dispose.js';
 import { waterTypeOf, isEnclosed, usesTerrain, WATER } from './core/water-types.js';
+import { normalizeFlowMapConfig, populateFlowMap } from './core/flow-map.js';
+import { PRESET_FORMAT, normalizePreset } from './presets/index.js';
 
 const VERSION = '0.6.0-alpha';
 
@@ -576,6 +578,56 @@ export class SeedOcean {
       this.ocean.simulator,
       filename ?? `seedocean-${slug}.glb`,
     );
+  }
+
+  /**
+   * Re-bake the FlowMap from the current preset, wiping painter strokes.
+   * No-op when the ocean has no FlowMap (`flowmap: false`).
+   */
+  resetFlowMap() {
+    const map = this.ocean?.flowMap;
+    if (!map) return;
+    const cfg = normalizeFlowMapConfig(this.preset.flowmap, this.preset);
+    if (cfg) populateFlowMap(map, this.preset, cfg);
+    else map.clear();
+    map.upload();
+  }
+
+  /**
+   * Serialize the live design to a seedocean-preset/1 envelope, embedding the
+   * painted FlowMap pixels when present. Download as JSON when `download` is
+   * true (demo Save); otherwise return the object for programmatic use.
+   *
+   * @param {{ download?: boolean, filename?: string }} [opts]
+   * @returns {{ format: string, preset: object }}
+   */
+  exportPreset({ download = false, filename } = {}) {
+    const state = this.state;
+    const merged = { ...this.preset, ...stateFromPreset(this.preset), ...state };
+    // Embed painted FlowMap so round-trip restores strokes.
+    const map = this.ocean?.flowMap;
+    if (map && map.isPainted()) {
+      const painted = map.toJSON();
+      const prev = typeof merged.flowmap === 'object' && merged.flowmap ? merged.flowmap : {};
+      merged.flowmap = {
+        ...prev,
+        size: painted.size,
+        worldExtent: painted.worldExtent,
+        pixels: painted.pixels,
+      };
+    }
+    const envelope = { format: PRESET_FORMAT, preset: normalizePreset(merged) };
+
+    if (download && typeof document !== 'undefined') {
+      const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename ?? `seedocean-${this.preset.id}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    return envelope;
   }
 
   dispose() {

@@ -143,7 +143,19 @@
 | FlowMap | Off | Off | Shore ring | Tangents + shore | Depth break + swash |
 | Demo boat/crates | Yes | Buoy only | Buoy only | Buoy only | Yes |
 
-**Not yet:** Interactive shoreline editor (Phase 11d) — `FlowMap.paint()` exists as the brush primitive.
+**Not yet:** — Phase 11 complete. Next: demo-object factory decoupling, Coastal Surf media capture.
+
+## Shoreline brush (demo)
+
+Hold **Shift** and drag on the water plane to paint. Modes in the lil-gui **Shoreline brush** folder:
+
+| Mode | Effect |
+|------|--------|
+| `shore` | Wet-foam (FlowMap.A) |
+| `flow` | Directional current (RG+B) — heading follows the stroke |
+| `erase` | Soft-clear toward neutral |
+
+**Reset map** re-bakes the preset FlowMap. **Save preset JSON** downloads a `seedocean-preset/1` file with the painted pixels embedded under `flowmap.pixels` for round-trip.
 
 ---
 

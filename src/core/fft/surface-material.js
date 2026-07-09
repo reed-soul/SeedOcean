@@ -227,18 +227,24 @@ export function createShadingUniforms(preset) {
 }
 
 export function applyShadingUniforms(shading, preset, state) {
-  // River flow — read preset.flow (dir + speed), normalize the direction.
+  // River / coast flow — read preset.flow (dir + speed), normalize the direction.
+  // When no explicit flow is set but a FlowMap is available for painting, keep a
+  // unit base speed so painted B-channel strokes actually scroll the surface.
   if (preset.flow) {
     const [fx, fz] = preset.flow.dir;
     const len = Math.hypot(fx, fz) || 1;
     shading.flowDir.value.set(fx / len, fz / len);
     shading.flowSpeed.value = preset.flow.speed ?? 0;
+  } else if (preset.flowmap !== false) {
+    shading.flowDir.value.set(0, 1);
+    shading.flowSpeed.value = 1;
   } else {
     shading.flowDir.value.set(0, 0);
     shading.flowSpeed.value = 0;
   }
-  // Shore foam gain — from explicit flowmap.shore, or waterType defaults when
-  // lake/river/coast auto-enable the shore baker (see normalizeFlowMapConfig).
+  // Shore foam gain — from explicit flowmap.shore, or waterType defaults.
+  // Ocean/pool with a painter-ready blank map still get a non-zero gain so
+  // stroked A-channel foam is visible (A stays 0 until painted).
   const waterType = waterTypeOf(preset);
   const shoreCfg = preset.flowmap?.shore;
   if (shoreCfg === false) {
@@ -251,6 +257,8 @@ export function applyShadingUniforms(shading, preset, state) {
     shading.shoreFoam.value = 0.9;
   } else if (waterType === WATER.COAST) {
     shading.shoreFoam.value = preset.flowmap?.surf?.foamStrength ?? 1.1;
+  } else if (preset.flowmap !== false) {
+    shading.shoreFoam.value = 0.9;
   } else {
     shading.shoreFoam.value = 0;
   }

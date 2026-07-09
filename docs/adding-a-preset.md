@@ -82,6 +82,12 @@ const { flowmap } = design({ preset: 'misty' });
 
 Optional: `pnpm capture` regenerates `docs/assets/presets/<id>.webp` once the look is locked.
 
+### Painter strokes (optional)
+
+In the live demo, **Shift+drag** paints the FlowMap. **Save preset JSON** embeds
+`flowmap.pixels` (base64 RGBA). Hand that JSON to `SeedOcean.create({ preset })`
+or `fromPreset()` — strokes restore on load. See `docs/sea-states.md` → Shoreline brush.
+
 ## Checklist (copy into the PR)
 
 - [ ] `src/presets/<id>.js` exports `{ id, name, … }` matching the filename

@@ -139,8 +139,9 @@ export interface Preset {
   flow?: { dir: [number, number]; speed: number };
   /**
    * Spatially-varying flow + wet-shore foam (`seedocean-flowmap/1`).
-   * Lake/river auto-enable a shore bake when omitted; set `false` to disable.
+   * Lake/river/coast auto-enable a shore bake when omitted; set `false` to disable.
    * Ocean/pool stay off unless an explicit block is provided.
+   * Painter exports embed `pixels` (base64 RGBA) for round-trip.
    */
   flowmap?: false | {
     /** Texture resolution (default 256). */
@@ -162,6 +163,8 @@ export interface Preset {
       foamStrength?: number;
       rushSpeed?: number;
     };
+    /** Base64 RGBA pixels from FlowMap.toJSON() — painter round-trip. */
+    pixels?: string;
   };
   /** River ribbon mesh config (Catmull-Rom centerline + width). */
   river?: {
@@ -272,6 +275,13 @@ export declare class SeedOcean {
   tick(): FrameInfo;
   resize(width: number, height: number): void;
   exportGLB(filename?: string): Promise<void>;
+  /** Re-bake FlowMap from the current preset (wipes painter strokes). */
+  resetFlowMap(): void;
+  /**
+   * Serialize live design to seedocean-preset/1, embedding painted FlowMap
+   * pixels when present. Set `download: true` to trigger a browser download.
+   */
+  exportPreset(opts?: { download?: boolean; filename?: string }): PresetEnvelope;
   dispose(): void;
 }
 
@@ -419,7 +429,14 @@ export declare class FlowMap {
     shoreBand?: number;
     shoreFoam?: number;
   }): void;
-  paint(x: number, z: number, dirX: number, dirZ: number, speed?: number, shore?: number, radius?: number): void;
+  paint(
+    x: number, z: number, dirX: number, dirZ: number,
+    speed?: number, shore?: number, radius?: number,
+    mode?: 'flow' | 'shore' | 'both' | 'erase',
+  ): void;
+  isPainted(): boolean;
+  toJSON(): { format: FlowMapFormat; size: number; worldExtent: number; pixels: string };
+  fromJSON(json: { size?: number; worldExtent?: number; pixels?: string }): boolean;
   sample(x: number, z: number): { dirX: number; dirZ: number; speed: number; shore: number };
   stats(): FlowMapStats;
   upload(): void;

@@ -254,6 +254,7 @@ export async function buildGerstnerOcean(renderer, preset, state) {
       underwaterMix: { value: 0 },
     },
     wakeField: null,
+    flowMap: null,
     spectrumParams: {},
     applyPreset(nextPreset, nextState) {
       reseedWaves(nextPreset, nextState);

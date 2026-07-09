@@ -168,7 +168,7 @@ pnpm capture        # regenerate docs/assets screenshots + GIF
 | 10 ✅ | Bounded-water scene enclosures (pool / lake valley / river gorge) + headless Design API |
 | 11a/b ✅ | FlowMap contract (`seedocean-flowmap/1`) + runtime sampling (river tangents, wet-shore foam) |
 | 11c ✅ | Coastal Surf — beach terrain + depth-based breaking foam + onshore rush |
-| 11d 🔜 | Shoreline editor / flowmap painter (demo brush → preset export) |
+| 11d ✅ | Shoreline editor — Shift+drag brush, Save preset JSON with embedded pixels |
 
 ## Layout
 

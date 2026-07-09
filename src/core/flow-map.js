@@ -439,10 +439,22 @@ export class FlowMap {
   }
 
   /**
-   * Paint a soft brush stroke — the primitive a future shoreline editor (11d)
-   * will call. Blends flow toward (dirX, dirZ, speed) and max-blends shore.
+   * Soft brush stroke. Modes:
+   *   'flow'  — blend RG+B toward (dirX, dirZ, speed); leave A alone
+   *   'shore' — max-blend A (shore foam); leave flow alone
+   *   'both'  — flow + shore (default, legacy paint behaviour)
+   *   'erase' — lerp all channels toward neutral
+   *
+   * @param {number} x  world X
+   * @param {number} z  world Z
+   * @param {number} dirX
+   * @param {number} dirZ
+   * @param {number} [speed=1]
+   * @param {number} [shore=0]
+   * @param {number} [radius=4]
+   * @param {'flow'|'shore'|'both'|'erase'} [mode='both']
    */
-  paint(x, z, dirX, dirZ, speed = 1, shore = 0, radius = 4) {
+  paint(x, z, dirX, dirZ, speed = 1, shore = 0, radius = 4, mode = 'both') {
     const { size, data, worldExtent } = this;
     const half = worldExtent * 0.5;
     const scale = size / worldExtent;
@@ -453,6 +465,9 @@ export class FlowMap {
     const len = Math.hypot(dirX, dirZ) || 1;
     const nx = dirX / len;
     const nz = dirZ / len;
+    const doFlow = mode === 'flow' || mode === 'both';
+    const doShore = mode === 'shore' || mode === 'both';
+    const erase = mode === 'erase';
 
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
@@ -463,16 +478,84 @@ export class FlowMap {
         const falloff = 1 - Math.sqrt(dist2) / (r || 1);
         const i = (py * size + px) * 4;
         const k = falloff * 0.65;
-        const curX = decSigned(data[i]);
-        const curZ = decSigned(data[i + 1]);
-        const curS = decUnit(data[i + 2]);
-        data[i] = encSigned(curX + (nx - curX) * k);
-        data[i + 1] = encSigned(curZ + (nz - curZ) * k);
-        data[i + 2] = encUnit(curS + (speed - curS) * k);
-        data[i + 3] = Math.max(data[i + 3], encUnit(shore * falloff));
+
+        if (erase) {
+          // Lerp toward neutral (128,128,0,0).
+          data[i] = Math.round(data[i] + (128 - data[i]) * k);
+          data[i + 1] = Math.round(data[i + 1] + (128 - data[i + 1]) * k);
+          data[i + 2] = Math.round(data[i + 2] * (1 - k));
+          data[i + 3] = Math.round(data[i + 3] * (1 - k));
+        } else {
+          if (doFlow) {
+            const curX = decSigned(data[i]);
+            const curZ = decSigned(data[i + 1]);
+            const curS = decUnit(data[i + 2]);
+            data[i] = encSigned(curX + (nx - curX) * k);
+            data[i + 1] = encSigned(curZ + (nz - curZ) * k);
+            data[i + 2] = encUnit(curS + (speed - curS) * k);
+          }
+          if (doShore) {
+            data[i + 3] = Math.max(data[i + 3], encUnit(shore * falloff));
+          }
+        }
         this.dirty = true;
       }
     }
+  }
+
+  /** True when any texel differs from the neutral clear state. */
+  isPainted() {
+    const { data } = this;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] !== 128 || data[i + 1] !== 128 || data[i + 2] !== 0 || data[i + 3] !== 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Serialize pixels for seedocean-preset/1 embedding.
+   * `pixels` is base64 of the raw RGBA Uint8Array — compact enough for a
+   * 256² map (~85 KB base64) and lossless for round-trip.
+   * @returns {{ format: string, size: number, worldExtent: number, pixels: string }}
+   */
+  toJSON() {
+    // btoa on large typed arrays: chunk to avoid call-stack / arg limits.
+    const bytes = this.data;
+    let bin = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    return {
+      format: FLOWMAP_FORMAT,
+      size: this.size,
+      worldExtent: this.worldExtent,
+      pixels: btoa(bin),
+    };
+  }
+
+  /**
+   * Load pixels from {@link toJSON} / a preset.flowmap.pixels payload.
+   * Size must match; worldExtent is updated. Returns false on mismatch.
+   * @param {{ size?: number, worldExtent?: number, pixels?: string }} json
+   */
+  fromJSON(json) {
+    if (!json?.pixels) return false;
+    if (json.size != null && json.size !== this.size) return false;
+    let raw;
+    try {
+      raw = atob(json.pixels);
+    } catch {
+      return false;
+    }
+    if (raw.length !== this.data.length) return false;
+    for (let i = 0; i < raw.length; i++) this.data[i] = raw.charCodeAt(i);
+    if (json.worldExtent != null) this.worldExtent = json.worldExtent;
+    this.dirty = true;
+    this.upload();
+    return true;
   }
 
   /** CPU sample at world XZ — for buoyancy / Design API introspection. */
@@ -600,22 +683,35 @@ export function populateFlowMap(map, preset, cfg) {
 
 /**
  * Run the standard bake pipeline for a preset. Pure CPU — safe in Node.
- * Returns a FlowMap, or null when the preset has no flowmap config.
+ * Returns a FlowMap, or null when the preset has no flowmap config and no
+ * embedded pixels.
  *
  * Shore foam:
  *   lake  → disc-edge ring (mesh boundary; basin floor stays below y=0)
  *   river → channel-edge band
  *   coast → depth-based surf break + wet-sand strip (beach crosses y=0)
  *
+ * If `preset.flowmap.pixels` is set (painter export), those pixels replace the
+ * procedural bake so a saved stroke round-trips.
+ *
  * @param {object} preset
  * @returns {FlowMap | null}
  */
 export function bakeFlowMapForPreset(preset) {
+  if (preset.flowmap === false) return null;
   const cfg = normalizeFlowMapConfig(preset.flowmap, preset);
-  if (!cfg) return null;
+  const hasPixels = Boolean(preset.flowmap?.pixels);
+  if (!cfg && !hasPixels) return null;
 
-  const map = new FlowMap(cfg.size, cfg.worldExtent);
-  populateFlowMap(map, preset, cfg);
-  map.upload();
+  const map = new FlowMap(
+    cfg?.size ?? preset.flowmap?.size ?? 256,
+    cfg?.worldExtent ?? preset.flowmap?.worldExtent ?? 220,
+  );
+  if (cfg) populateFlowMap(map, preset, cfg);
+  if (hasPixels) {
+    map.fromJSON(preset.flowmap);
+  } else {
+    map.upload();
+  }
   return map;
 }

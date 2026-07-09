@@ -15,6 +15,7 @@ import {
   bakeFlowMapForPreset,
   normalizeFlowMapConfig,
   FLOWMAP_FORMAT,
+  FlowMap,
 } from '../src/api/seedocean.js';
 import { PRESETS } from '../src/presets/index.js';
 
@@ -136,4 +137,45 @@ assert.equal(bakeFlowMapForPreset(PRESETS.coastal), null);
 assert.equal(bakeFlowMapForPreset(PRESETS.pool), null);
 ok('ocean/pool skip FlowMap');
 
+console.log('\nPainter round-trip');
+
+const paintMap = new FlowMap(64, 40);
+paintMap.paint(0, 0, 0, 1, 0.8, 0.9, 5, 'shore');
+paintMap.paint(5, 0, 1, 0, 0.7, 0, 4, 'flow');
+assert.ok(paintMap.isPainted());
+const painted = paintMap.toJSON();
+assert.equal(painted.format, FLOWMAP_FORMAT);
+assert.ok(painted.pixels.length > 100);
+const restored = new FlowMap(64, 40);
+assert.ok(restored.fromJSON(painted));
+assert.ok(Math.abs(restored.sample(0, 0).shore - paintMap.sample(0, 0).shore) < 0.02);
+assert.ok(restored.sample(5, 0).speed > 0.3);
+// Erase clears toward neutral.
+paintMap.paint(0, 0, 0, 0, 0, 0, 8, 'erase');
+assert.ok(paintMap.sample(0, 0).shore < 0.5);
+paintMap.dispose();
+restored.dispose();
+ok('FlowMap toJSON ↔ fromJSON + erase mode');
+
+// Embedded pixels in a preset survive bakeFlowMapForPreset.
+const baked = bakeFlowMapForPreset({
+  ...PRESETS.surf,
+  flowmap: {
+    size: 64,
+    worldExtent: 40,
+    pixels: painted.pixels,
+    shore: { bandWidth: 2, foamStrength: 1 },
+    surf: false,
+  },
+});
+assert.ok(baked);
+assert.equal(baked.size, 64);
+assert.ok(baked.isPainted());
+assert.ok(baked.sample(0, 0).shore > 0.3);
+baked.dispose();
+ok('bakeFlowMapForPreset restores embedded pixels');
+
 console.log(`\n${passed} assertions passed.`);
+
+
+

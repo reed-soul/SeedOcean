@@ -11,6 +11,7 @@ export { buildPoolScene } from './core/pool-scene.js';
 export { buildRiverMesh, defaultRiverCenterline } from './core/river-mesh.js';
 export { FlowMap, bakeFlowMapForPreset, normalizeFlowMapConfig, FLOWMAP_FORMAT } from './core/flow-map.js';
 export { WATER, waterTypeOf, usesTerrain, isEnclosed, usesFlowMapAuto, usesPatchMesh } from './core/water-types.js';
+export { attachShorelinePainter } from './ui/shoreline-painter.js';
 export { exportFFTOceanGLB } from './core/export-glb.js';
 export { statsOf, spectrumStats, bandStats } from './core/stats.js';
 export { stateFromPreset } from './state.js';
