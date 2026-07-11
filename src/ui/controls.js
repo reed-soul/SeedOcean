@@ -1,5 +1,6 @@
 import GUI from 'lil-gui';
 import { PRESET_LIST } from '../presets/index.js';
+import { mountPanelFX } from './panel-fx.js';
 
 /**
  * @param {object} ctx
@@ -14,8 +15,17 @@ import { PRESET_LIST } from '../presets/index.js';
  * @param {() => void} [ctx.onExportPreset]
  */
 export function buildGUI(ctx) {
-  const gui = new GUI({ title: 'SeedOcean' });
+  const gui = new GUI({ title: '' });
   const state = ctx.state;
+
+  // Branding header — pure-text wordmark (drop in a logo image later by
+  // replacing this span with an <img>). Sits above the folders.
+  const brand = document.createElement('div');
+  brand.className = 'so-brand';
+  brand.textContent = 'SeedOcean';
+  gui.domElement.prepend(brand);
+  gui.domElement.querySelector(':scope > .lil-title')?.remove(); // brand replaces the default title bar
+  mountPanelFX(gui.domElement); // flowing-waves GPU background
 
   const presetNames = Object.fromEntries(PRESET_LIST.map((p) => [p.name, p.id]));
   const presetFolder = gui.addFolder('Preset');
