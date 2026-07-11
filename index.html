@@ -20,12 +20,71 @@
         color: #ff9c9c; font: 14px/1.5 ui-monospace, monospace; padding: 24px;
         text-align: center; background: #040a12;
       }
+      /* SeedOcean-themed loader — matches the options panel: opaque deep-sea
+         card, living cyan breathing border, flowing-wave canvas behind. */
+      #loading {
+        position: fixed; inset: 0; z-index: 20; display: none;
+        align-items: center; justify-content: center;
+        background: radial-gradient(120% 120% at 50% 40%, rgba(6, 14, 26, 0.84), rgba(2, 6, 12, 0.95));
+        backdrop-filter: blur(3px);
+        color: #e6f2fb; font: 13px/1.5 'Segoe UI', system-ui, sans-serif;
+        text-align: center; letter-spacing: 0.02em;
+        opacity: 1; transition: opacity 0.4s ease; /* compositor fade-out (survives main-thread block) */
+      }
+      #loading.on { display: flex; }
+      #loading.fade { opacity: 0; }
+      #loading .card {
+        position: relative; overflow: hidden;
+        display: flex; flex-direction: column; align-items: center; gap: 18px;
+        padding: 32px 44px 26px; border-radius: 16px;
+        background: #071422; box-shadow: 0 24px 70px rgba(0,0,0,0.55);
+      }
+      #loading .card::before { /* living cyan breathing border */
+        content: ''; position: absolute; inset: 0; border-radius: 16px; padding: 1.5px;
+        background: linear-gradient(140deg, #2a9fd6, rgba(94, 207, 255, 0.65), #0d4f7a);
+        background-size: 300% 300%; animation: so-load-breathe 9s ease-in-out infinite;
+        -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; z-index: 3;
+      }
+      @keyframes so-load-breathe { 0%,100% { background-position: 0% 40%; } 50% { background-position: 100% 60%; } }
+      #loading .card::after { /* readability scrim over the waves */
+        content: ''; position: absolute; inset: 0; border-radius: 16px; z-index: 1; pointer-events: none;
+        background: linear-gradient(180deg, rgba(5, 12, 24, 0.50), rgba(5, 12, 24, 0.80));
+      }
+      #loading .card canvas.so-fx { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 16px; z-index: 0; }
+      #loading .card > * { position: relative; z-index: 2; }
+      #loading .brand {
+        font-size: 28px; font-weight: 700; letter-spacing: 0.04em; color: #e6f2fb;
+        text-shadow: 0 0 18px rgba(42, 159, 214, 0.55);
+      }
+      #loading .bar {
+        position: relative;
+        width: 300px; max-width: 60vw; height: 6px; border-radius: 4px;
+        background: rgba(0,0,0,0.38); border: 1px solid rgba(42, 159, 214, 0.28); overflow: hidden;
+      }
+      #loading .bar-fill {
+        height: 100%; width: 0%; border-radius: 4px;
+        background: linear-gradient(90deg, #0d4f7a, #2a9fd6 55%, #5ecfff);
+        box-shadow: 0 0 10px rgba(42, 159, 214, 0.45); transition: width 0.25s ease;
+      }
+      /* Sliding highlight — pure transform so the COMPOSITOR keeps it moving even
+         while the main thread is blocked compiling shaders (the width bar freezes,
+         this doesn't). This is what makes the wait feel alive instead of hung. */
+      #loading .bar::after {
+        content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 42%;
+        background: linear-gradient(90deg, transparent, rgba(190, 240, 255, 0.42), transparent);
+        transform: translateX(-120%); will-change: transform;
+        animation: so-load-shine 1.15s linear infinite;
+      }
+      @keyframes so-load-shine { to { transform: translateX(320%); } }
+      #loading .msg { min-height: 1.4em; color: #8eb4d4; }
     </style>
   </head>
   <body>
     <div id="app"></div>
     <div id="hud"></div>
     <div id="err"></div>
+    <div id="loading"><div class="card"><div class="brand">SeedOcean</div><div class="bar"><div class="bar-fill"></div></div><div class="msg">Loading</div></div></div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

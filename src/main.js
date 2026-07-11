@@ -3,6 +3,7 @@ import WebGPU from 'three/addons/capabilities/WebGPU.js';
 import { SeedOcean } from './seedocean.js';
 import { buildGUI } from './ui/controls.js';
 import { attachShorelinePainter } from './ui/shoreline-painter.js';
+import { mountPanelFX } from './ui/panel-fx.js';
 import './ui/theme.css';
 
 const hud = document.getElementById('hud');
@@ -19,6 +20,40 @@ if (!WebGPU.isAvailable()) {
   console.warn('WebGPU unavailable — running in WebGL2 fallback mode (Gerstner waves).');
 }
 
+// Loading overlay — shown for the unavoidable slow path (renderer init + FFT
+// pipeline compile + environment build all recompile GPU pipelines). Same
+// flowing-wave GPU background as the options panel, behind the loader card.
+const loadingBox = document.getElementById('loading');
+const loadingMsg = loadingBox?.querySelector('.msg');
+const loadingBar = loadingBox?.querySelector('.bar-fill');
+const loadingCard = loadingBox?.querySelector('.card');
+if (loadingCard) mountPanelFX(loadingCard);
+const showLoading = () => { loadingBox?.classList.remove('fade'); loadingBox?.classList.add('on'); };
+// Fade out (opacity is compositor-driven, so the fade stays smooth even if the
+// main thread is still settling), then drop display:none once it's faded.
+const hideLoading = () => {
+  if (!loadingBox) return;
+  loadingBox.classList.add('fade');
+  setTimeout(() => loadingBox.classList.remove('on', 'fade'), 450);
+};
+// Two rAFs guarantee the browser actually PAINTS the overlay before we hand the
+// main thread to the blocking pipeline compile (one rAF only queues it).
+const nextPaint = () => new Promise((r) => {
+  let done = false; const fin = () => { if (!done) { done = true; r(); } };
+  requestAnimationFrame(() => requestAnimationFrame(fin));
+  setTimeout(fin, 300); // fallback: a backgrounded/throttled tab pauses rAF — don't hang
+});
+// Progress bar + live step label. setStage writes the text/width; stageStep also
+// YIELDS a paint so each step is SEEN before the next blocking chunk runs (a
+// synchronous shader compile can't repaint mid-freeze — the bar would just jump).
+const setStage = (text, frac) => {
+  if (loadingMsg && text != null) loadingMsg.textContent = text;
+  if (loadingBar && frac != null) loadingBar.style.width = `${Math.round(frac * 100)}%`;
+};
+
+// Show the loader immediately so there's never a blank frame before init runs.
+showLoading();
+
 let seedOcean;
 let controls;
 let painter;
@@ -29,6 +64,9 @@ async function init() {
   const params = new URLSearchParams(location.search);
   const initialPreset = params.get('preset') || undefined;
 
+  setStage('Initializing renderer…', 0.12);
+  await nextPaint();
+
   seedOcean = await SeedOcean.create({
     container: app,
     preset: initialPreset,
@@ -36,6 +74,9 @@ async function init() {
     quality: 'quality',
     validateFFT: true,
   });
+
+  setStage('Compiling FFT ocean…', 0.55);
+  await nextPaint();
 
   controls = new OrbitControls(seedOcean.camera, seedOcean.renderer.domElement);
   controls.enableDamping = true;
@@ -64,9 +105,16 @@ async function init() {
     onBrushReset: () => painter.reset(),
   });
 
+  setStage('Almost ready', 0.9);
+  await nextPaint();
+
   window.addEventListener('resize', onResize);
   window.__seedOcean = seedOcean;
   seedOcean.renderer.setAnimationLoop(animate);
+
+  // Let the first rendered frame paint before lifting the overlay, so the
+  // canvas is actually visible underneath the fade-out.
+  requestAnimationFrame(() => requestAnimationFrame(hideLoading));
 }
 
 function onResize() {

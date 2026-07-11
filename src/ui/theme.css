@@ -1,13 +1,16 @@
-/* SeedOcean UI — ocean-blue lil-gui skin (SeedThree-inspired layout). */
+/* SeedOcean UI — ocean-blue lil-gui skin with the "flowing waves" GPU shader
+   (panel-fx.js) as its background. Modeled on SeedThree's panel skin. */
 
 :root {
   --so-text: #e6f2fb;
   --so-dim: #8eb4d4;
   --so-accent: #2a9fd6;
   --so-deep: #0d4f7a;
+  --so-foam: #5ecfff;
   --so-radius: 14px;
 }
 
+/* ---------- lil-gui reskin (this lil-gui version uses lil-* classes) -------- */
 .lil-gui {
   --background-color: transparent;
   --title-background-color: transparent;
@@ -23,31 +26,110 @@
 }
 
 .lil-gui.lil-root {
-  position: fixed;
+  position: fixed; /* keep lil-gui's top-right anchoring (relative dropped it
+                      into document flow, on top of the HUD) */
   top: 12px;
   right: 12px;
   margin: 0;
   border-radius: var(--so-radius);
-  background: #071422;
+  background: #071422; /* opaque — the coolness is the shader, not glass */
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
   overflow: hidden auto;
   max-height: calc(100vh - 24px);
-  border: 1px solid rgba(42, 159, 214, 0.35);
 }
+
+/* living gradient border */
+.lil-gui.lil-root::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--so-radius);
+  padding: 1.5px;
+  background: linear-gradient(140deg, var(--so-accent), rgba(94, 207, 255, 0.65), var(--so-deep));
+  background-size: 300% 300%;
+  animation: so-border-breathe 9s ease-in-out infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 4;
+}
+@keyframes so-border-breathe {
+  0%, 100% { background-position: 0% 40%; }
+  50% { background-position: 100% 60%; }
+}
+
+/* flowing-waves shader canvas (mounted by panel-fx.js) */
+.lil-gui.lil-root canvas.so-fx {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--so-radius);
+  z-index: 0;
+}
+
+/* readability scrim: calm dark over the content column, letting the waves glow
+   through mostly at the panel's edges */
+.lil-gui.lil-root::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--so-radius);
+  background:
+    linear-gradient(180deg, rgba(5, 12, 24, 0.28) 0%, rgba(5, 12, 24, 0.64) 16%,
+      rgba(5, 12, 24, 0.70) 82%, rgba(5, 12, 24, 0.42) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+.lil-gui.lil-root > .lil-children,
+.lil-gui.lil-root > .so-brand { position: relative; z-index: 3; }
 
 .lil-gui .lil-title {
   font-weight: 600;
   letter-spacing: 0.04em;
+  border-radius: 8px;
 }
+.lil-gui .lil-title:hover { background: rgba(255, 255, 255, 0.06); }
 
-.lil-gui .lil-controller .lil-name {
-  color: var(--so-dim);
+.lil-gui.lil-root > .lil-children { padding: 4px 6px 10px; }
+.lil-gui:not(.lil-root) {
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  margin: 3px 4px;
 }
+.lil-gui:not(.lil-root) > .lil-title { color: var(--so-dim); }
+.lil-gui.lil-closed > .lil-title { opacity: 0.85; }
 
-.lil-gui .lil-controller .lil-widget {
+.lil-gui .lil-controller { border-radius: 8px; }
+.lil-gui .lil-controller:hover { background: rgba(255, 255, 255, 0.045); }
+.lil-gui .lil-controller .lil-name { color: var(--so-dim); }
+.lil-gui .lil-slider {
   border-radius: 6px;
+  background: rgba(255, 255, 255, 0.09);
 }
+.lil-gui .lil-fill { background: linear-gradient(90deg, var(--so-deep), var(--so-accent)); }
+.lil-gui input, .lil-gui select {
+  border-radius: 6px !important;
+  background: rgba(0, 0, 0, 0.32);
+}
+.lil-gui .lil-function .lil-name {
+  color: var(--so-text);
+  font-weight: 600;
+}
+.lil-gui .lil-function:hover { background: rgba(42, 159, 214, 0.15); }
 
-.lil-gui .lil-controller .lil-slider {
-  background: linear-gradient(90deg, var(--so-deep), var(--so-accent));
+/* branding header injected by controls.js */
+.so-brand {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 8px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--so-text);
+  text-shadow: 0 0 14px rgba(42, 159, 214, 0.5);
 }
